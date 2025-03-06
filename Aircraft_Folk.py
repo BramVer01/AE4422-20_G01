@@ -17,7 +17,7 @@ class Aircraft(object):
         """
         
         #Fixed parameters
-        self.speed = 1         #how much a/c moves per unit of t
+        
         self.id = flight_id       #flight_id
         self.type = a_d           #arrival or departure (A/D)
         self.spawntime = spawn_time #spawntime
@@ -26,7 +26,8 @@ class Aircraft(object):
         self.nodes_dict = nodes_dict #keep copy of nodes dict
         
         #Route related
-        self.status = None 
+        self.position = (0, 0)  # No movement logic here anymore
+        self.status = None
         self.path_to_goal = [] #planned path left from current location
         self.from_to = [0,0]
 
@@ -64,48 +65,7 @@ class Aircraft(object):
     
         self.heading = heading
       
-    def move(self, dt, t):   
-        """
-        Moves an aircraft between from_node and to_node and checks if to_node or goal is reached.
-        INPUT:
-            - dt = 
-            - t = 
-        """
-        
-        #Determine nodes between which the ac is moving
-        from_node = self.from_to[0]
-        to_node = self.from_to[1]
-        xy_from = self.nodes_dict[from_node]["xy_pos"] #xy position of from node
-        xy_to = self.nodes_dict[to_node]["xy_pos"] #xy position of to node
-        distance_to_move = self.speed*dt #distance to move in this timestep
-  
-        #Update position with rounded values
-        x = xy_to[0]-xy_from[0]
-        y = xy_to[1]-xy_from[1]
-        x_normalized = x / math.sqrt(x**2+y**2)
-        y_normalized = y / math.sqrt(x**2+y**2)
-        posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
-        posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
-        self.position = (posx, posy)  
-        self.get_heading(xy_from, xy_to)	
-
-        #Check if goal is reached or if to_node is reached
-        if self.position == xy_to and self.path_to_goal[0][1] == t+dt: #If with this move its current to node is reached
-            if self.position == self.nodes_dict[self.goal]["xy_pos"]: #if the final goal is reached
-                self.status = "arrived"
-
-            else:  #current to_node is reached, update the remaining path
-                remaining_path = self.path_to_goal
-                self.path_to_goal = remaining_path[1:]
-                
-                new_from_id = self.from_to[1] #new from node
-                new_next_id = self.path_to_goal[0][0] #new to node
-
-                if new_from_id != self.from_to[0]:
-                    self.last_node = self.from_to[0]
-                
-                self.from_to = [new_from_id, new_next_id] #update new from and to node
-
+    
     def plan_independent(self, nodes_dict, edges_dict, heuristics, t):
         """
         Plans a path for taxiing aircraft assuming that it knows the entire layout.
