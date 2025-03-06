@@ -3,27 +3,65 @@ import time
 from queue import Queue
 
 class Tug:
-    """Tug class representing a tug agent."""
     def __init__(self, tug_id, position, depot):
-        self.id = tug_id  # Unique tug ID
-        self.status = "idle"  # Tug status (idle, assigned, busy)
-        self.position = position  # Current position (node ID)
-        self.path = []  # Path assigned to the tug
-        self.distance_traveled = 0  # Total distance traveled; KPI voor later
-        self.depot = depot  # Home depot
-    
+        self.id = tug_id
+        self.position = position  # Initial position of the tug as a tuple (x, y)
+        self.depot = depot
+        self.current_aircraft = None  # Initially no aircraft attached
+        self.speed = 5    # Define the tug's speed
+
     def assign_task(self, task):
-        """Assigns a task to the tug."""
-        self.status = "assigned"
-        self.path = []  # Will be determined by A*
-        print(f"Tug {self.id} assigned to task {task.flight_id}")
-        return task
+        self.task = task
+        print(f"Task '{task}' assigned to Tug {self.id}")
+
+    def move(self, dt, t):
+        """Move the tug (and attached aircraft)"""
+        if self.current_aircraft:
+            # Move the aircraft along with the tug
+            self.current_aircraft.position = (self.position[0], self.position[1])
+        
+        # Update the tug's position, make sure it stays as a tuple
+        self.position = (self.position[0] + self.speed * dt, self.position[1])  # Update position of tug
+
+    def move_tug_with_aircraft(self, dt, t):
+        """
+        Moves the tug and the attached aircraft together.
+        """
+        if self.current_aircraft:
+            ac_position = self.current_aircraft.position
+            tug_position = self.position
+
+            # Calculate direction from tug to aircraft
+            direction = (ac_position[0] - tug_position[0], ac_position[1] - tug_position[1])
+
+            # Normalize direction to ensure consistent speed
+            distance = math.sqrt(direction[0]**2 + direction[1]**2)
+            if distance > 0:
+                direction = (direction[0] / distance, direction[1] / distance)
+
+            # Move the tug and the aircraft towards each other
+            self.position = (tug_position[0] + direction[0] * self.speed * dt,
+                             tug_position[1] + direction[1] * self.speed * dt)
+
+            # Move the aircraft with the tug
+            self.current_aircraft.position = (ac_position[0] + direction[0] * self.speed * dt,
+                                              ac_position[1] + direction[1] * self.speed * dt)
+
+            # Check if the tug and aircraft have reached the goal and detach
+            if self.position == self.current_aircraft.position:
+                self.current_aircraft.status = "taxiing"
+                self.current_aircraft = None
 
     def request_path(self, task):
-        """Request A* algorithm to calculate the path."""
-        print(f"Tug {self.id} requesting A* path from {self.position} to {task.goal_node}")
-        # This should call the A* function from another file
-        return []  # Placeholder for A* path
+        """
+        This method could be used to request a path for the tug to follow.
+        You could have the tug request a path from a pathfinding algorithm
+        or some other process based on the task.
+        """
+        # Example of what this method might look like
+        print(f"Tug {self.id} is requesting a path for task {task}")
+        # Implement pathfinding or other logic as needed
+
 
 class Depot:
     """Depot class to manage tugs and task queue."""
@@ -59,6 +97,7 @@ class FlightTask:
         self.spawn_time = spawn_time
 
 
+
 def generate_flight_task(flight_id):
     """Generates a flight task at a certain frequency."""
     a_d = random.choice(["A", "D"])  # Arrival or Departure
@@ -74,16 +113,16 @@ def generate_flight_task(flight_id):
     return FlightTask(flight_id, a_d, start_node, goal_node, spawn_time)
 
 # Creating two depots
-# NOTE Miguel: Deze nodes (node 20 and node 17) gaan we nog veranderen, maar eerst moeten we even de nodes toevoegen aan de Excel file hiervoor
-departure_depot = Depot(1, position=20)  # Departure depot at node 20
-arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+departure_depot = Depot(1, position=112)  # Departure depot at node 20
+arrival_depot = Depot(2, position=113)  # Arrival depot at node 17
 
 # Creating tugs for each depot
-tug1 = Tug(1, position=20, depot=departure_depot)  
-tug2 = Tug(2, position=17, depot=arrival_depot)  
 
-departure_depot.add_tug(tug1)  
-arrival_depot.add_tug(tug2) 
+tug1 = Tug(1, position=(2, 5), depot=departure_depot)  # Use a tuple for position
+tug2 = Tug(2, position=(2, 4), depot=arrival_depot)    # Use a tuple for position
+
+departure_depot.add_tug(tug1)
+arrival_depot.add_tug(tug2)
 
 # Generating a flight task
 task1 = generate_flight_task(1) #Voor nu 1 task en 1 tug per depot om te checken

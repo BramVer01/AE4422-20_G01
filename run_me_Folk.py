@@ -8,13 +8,13 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import time as timer
 import pygame as pg
-from single_agent_planner import calc_heuristics
+from single_agent_planner_Folkert import calc_heuristics
 from visualization import map_initialization, map_running
-from Aircraft import Aircraft
+from Aircraft_Folk import Aircraft
 from independent import run_independent_planner
 from prioritized import run_prioritized_planner
 from cbs import run_CBS
-
+from Tug_allocation import Tug, Depot, generate_flight_task  # Replace 'your_tug_file' with the actual file name
 
 
 #%% SET SIMULATION PARAMETERS
@@ -24,7 +24,7 @@ edges_file = "edges.xlsx" #xlsx file with for each edge: from  (node), to (node)
 
 #Parameters that can be changed:
 simulation_time = 20
-planner = "Prioritized" #choose which planner to use (currently only Independent is implemented)
+planner = "Independent" #choose which planner to use (currently only Independent is implemented)
 
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
@@ -148,67 +148,94 @@ aircraft_lst = []   #List which can contain aircraft agents
 if visualization:
     map_properties = map_initialization(nodes_dict, edges_dict) #visualization properties
 
+#ADDED FROM THE TUG ALLOCATION:
+# Initialize depots
+departure_depot = Depot(1, position=20)  # Departure depot at node 20
+arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+
+# Initialize tugs and add them to their respective depots
+tug1 = Tug(1, position=20, depot=departure_depot)  
+tug2 = Tug(2, position=17, depot=arrival_depot)  
+
+departure_depot.add_tug(tug1)  
+arrival_depot.add_tug(tug2) 
+
+
 # =============================================================================
 # 1. While loop and visualization
 # =============================================================================
  
-#Start of while loop    
-running=True
+running = True
 escape_pressed = False
 time_end = simulation_time
-dt = 0.1 #should be factor of 0.5 (0.5/dt should be integer)
-t= 0
+dt = 0.5  # Should be factor of 0.5 (0.5/dt should be integer)
+t = 0
 
 print("Simulation Started")
 while running:
-    t= round(t,2)    
-       
-    #Check conditions for termination
-    if t >= time_end or escape_pressed: 
+    t = round(t, 2)
+
+    # Check conditions for termination
+    if t >= time_end or escape_pressed:
         running = False
         pg.quit()
         print("Simulation Stopped")
-        break 
-    
-    #Visualization: Update map if visualization is true
+        break
+
+    # Visualization: Update map if visualization is true
     if visualization:
-        current_states = {} #Collect current states of all aircraft
+        current_states = {}  # Collect current states of all aircraft
         for ac in aircraft_lst:
             if ac.status == "taxiing":
                 current_states[ac.id] = {"ac_id": ac.id,
                                          "xy_pos": ac.position,
                                          "heading": ac.heading}
         escape_pressed = map_running(map_properties, current_states, t)
-        timer.sleep(visualization_speed) 
-      
-    #Spawn aircraft for this timestep (use for example a random process)
-    if t == 1:    
-        ac = Aircraft(1, 'A', 37,36,t, nodes_dict) #As an example we will create one aicraft arriving at node 37 with the goal of reaching node 36
-        ac1 = Aircraft(2, 'D', 36,37,t, nodes_dict)#As an example we will create one aicraft arriving at node 36 with the goal of reaching node 37
+        timer.sleep(visualization_speed)
+
+    # Spawn aircraft for this timestep
+    if t == 1:
+        # Create aircraft and tasks...
+        ac = Aircraft(1, 'A', 37, 36, t, nodes_dict)
         aircraft_lst.append(ac)
-        aircraft_lst.append(ac1)
-        
-    #Do planning 
-    if planner == "Independent":     
-        if t == 1: #(Hint: Think about the condition that triggers (re)planning) 
+
+        # Create a flight task and assign to tug
+        task1 = generate_flight_task(1)
+        if task1.type == "A":
+            arrival_depot.add_task(task1)
+            arrival_depot.match_task()  # This will assign the task to the available tug
+        else:
+            departure_depot.add_task(task1)
+            departure_depot.match_task()  # This will assign the task to the available tug
+
+    # Move tugs and aircraft attached to them
+    for tug in [tug1, tug2]:
+        tug.move(dt, t)  # This will move both the tug and the attached aircraft
+
+    # Do planning
+    if planner == "Independent":
+        if t == 1:  # (Hint: Think about the condition that triggers (re)planning)
             run_independent_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
     elif planner == "Prioritized":
-        if t == 1:
-            run_prioritized_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
+        run_prioritized_planner()
     elif planner == "CBS":
         run_CBS()
-    #elif planner == -> you may introduce other planners here
+    # elif planner == -> you may introduce other planners here
     else:
-        raise Exception("Planner:", planner, "is not defined.")
-                       
-    #Move the aircraft that are taxiing
-    for ac in aircraft_lst: 
-        if ac.status == "taxiing": 
-            ac.move(dt, t)
-                           
+        raise Exception(f"Planner: {planner} is not defined.")
+
+    # Move the aircraft that are taxiing
+    for ac in aircraft_lst:
+        if ac.status == "taxiing":
+            # Aircraft moves with the tug, no need for separate move function
+            pass
+
     t = t + dt
+
           
 # =============================================================================
 # 2. Implement analysis of output data here
 # =============================================================================
 #what data do you want to show?
+
+# %%
