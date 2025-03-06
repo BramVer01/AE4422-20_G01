@@ -117,3 +117,66 @@ def get_path(goal_node):
     path.reverse()
     #print(path)
     return path
+
+def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heuristics, time_start, agent, constraints):
+    # def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
+    """
+    Single agent A* search. Time start can only be the time that an agent is at a node.
+    INPUT:
+        - nodes_dict = [dict] dictionary with nodes and node properties
+        - from_node = [int] node_id of node from which planning is done
+        - goal_node = [int] node_id of node to which planning is done
+        - heuristics = [dict] dict with shortest path distance between nodes. Dictionary in a dictionary. Key of first dict is fromnode and key in second dict is tonode.
+        - time_start = [float] planning start time. 
+        - Hint: do you need more inputs?
+    RETURNS:
+        - success = True/False. True if path is found and False is no path is found
+        - path = list of tuples with (loc, timestep) pairs -> example [(37, 1), (101, 2)]. Empty list if success == False.
+    """
+    
+    from_node_id = from_node
+    goal_node_id = goal_node
+    time_start = time_start
+    agent = agent
+    constraint_table = build_constraint_table(constraints, agent)
+   
+    
+    open_list = []
+    closed_list = dict()
+    earliest_goal_timestep = time_start
+    h_value = heuristics[from_node_id][goal_node_id]
+    root = {'loc': from_node_id, 'g_val': 0, 'h_val': h_value, 'parent': None, 'timestep': time_start}
+    push_node(open_list, root)
+    closed_list[(root['loc'], root['timestep'])] = root
+    while len(open_list) > 0:
+        curr = pop_node(open_list)
+        if curr['loc'] == goal_node_id and curr['timestep'] >= earliest_goal_timestep:
+            found = True
+            if curr['timestep'] + 1 < len(constraint_table):
+                for t in range(curr['timestep'] + 1, len(constraint_table)):
+                    if is_constrained(goal_node_id, goal_node_id, t, constraint_table):
+                        found = False
+                        earliest_goal_timestep = t + 1
+                        break
+            if found:
+                return get_path(curr)
+
+            #return True, get_path(curr) 
+            #In tutorial also now for dir in range(5): is used. What for? how to implement?
+        
+        for neighbor in nodes_dict[curr['loc']]["neighbors"]:
+            child = {'loc': neighbor,
+                    'g_val': curr['g_val'] + 0.5,
+                    'h_val': heuristics[neighbor][goal_node_id],
+                    'parent': curr,
+                    'timestep': curr['timestep'] + 0.5}
+            if (child['loc'], child['timestep']) in closed_list:
+                existing_node = closed_list[(child['loc'], child['timestep'])]
+                if compare_nodes(child, existing_node):
+                    closed_list[(child['loc'], child['timestep'])] = child
+                    push_node(open_list, child)
+            else:
+                closed_list[(child['loc'], child['timestep'])] = child
+                push_node(open_list, child)
+    print("No path found, "+str(len(closed_list))+" nodes visited")
+    return False, [] # Failed to find solutions
