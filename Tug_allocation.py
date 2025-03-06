@@ -1,6 +1,8 @@
 import random
 import time
 from queue import Queue
+import numpy as np
+import math
 
 class Tug:
     def __init__(self, tug_id, position, depot):
@@ -9,19 +11,22 @@ class Tug:
         self.depot = depot
         self.current_aircraft = None  # Initially no aircraft attached
         self.speed = 5    # Define the tug's speed
+        self.heading = 0
 
     def assign_task(self, task):
         self.task = task
         print(f"Task '{task}' assigned to Tug {self.id}")
 
-    def move(self, dt, t):
+    def move(self, dt, t, nodes_dict):
         """Move the tug (and attached aircraft)"""
         if self.current_aircraft:
             # Move the aircraft along with the tug
             self.current_aircraft.position = (self.position[0], self.position[1])
         
         # Update the tug's position, make sure it stays as a tuple
-        self.position = (self.position[0] + self.speed * dt, self.position[1])  # Update position of tug
+        x = self.position[0] + self.speed * dt * np.cos(self.heading)
+        y = self.position[1] + self.speed * dt * np.sin(self.heading)
+        self.position = (x,y)  # Update position of tug
 
     def move_tug_with_aircraft(self, dt, t):
         """
