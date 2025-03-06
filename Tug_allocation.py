@@ -59,6 +59,7 @@ class FlightTask:
         self.spawn_time = spawn_time
 
 
+
 def generate_flight_task(flight_id):
     """Generates a flight task at a certain frequency."""
     a_d = random.choice(["A", "D"])  # Arrival or Departure
