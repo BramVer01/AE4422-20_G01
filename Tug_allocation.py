@@ -74,16 +74,15 @@ def generate_flight_task(flight_id):
     return FlightTask(flight_id, a_d, start_node, goal_node, spawn_time)
 
 # Creating two depots
-# NOTE Miguel: Deze nodes (node 20 and node 17) gaan we nog veranderen, maar eerst moeten we even de nodes toevoegen aan de Excel file hiervoor
-departure_depot = Depot(1, position=20)  # Departure depot at node 20
-arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+departure_depot = Depot(1, position=112)  # Departure depot at node 20
+arrival_depot = Depot(2, position=113)  # Arrival depot at node 17
 
 # Creating tugs for each depot
-tug1 = Tug(1, position=20, depot=departure_depot)  
-tug2 = Tug(2, position=17, depot=arrival_depot)  
+tug1 = Tug(1, position=112, depot=departure_depot)
+tug2 = Tug(2, position=113, depot=arrival_depot)
 
-departure_depot.add_tug(tug1)  
-arrival_depot.add_tug(tug2) 
+departure_depot.add_tug(tug1)
+arrival_depot.add_tug(tug2)
 
 # Generating a flight task
 task1 = generate_flight_task(1) #Voor nu 1 task en 1 tug per depot om te checken
