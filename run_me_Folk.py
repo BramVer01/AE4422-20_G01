@@ -148,6 +148,19 @@ aircraft_lst = []   #List which can contain aircraft agents
 if visualization:
     map_properties = map_initialization(nodes_dict, edges_dict) #visualization properties
 
+#ADDED FROM THE TUG ALLOCATION:
+# Initialize depots
+departure_depot = Depot(1, position=20)  # Departure depot at node 20
+arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+
+# Initialize tugs and add them to their respective depots
+tug1 = Tug(1, position=20, depot=departure_depot)  
+tug2 = Tug(2, position=17, depot=arrival_depot)  
+
+departure_depot.add_tug(tug1)  
+arrival_depot.add_tug(tug2) 
+
+
 # =============================================================================
 # 1. While loop and visualization
 # =============================================================================
@@ -182,11 +195,24 @@ while running:
         timer.sleep(visualization_speed) 
       
     #Spawn aircraft for this timestep (use for example a random process)
-    if t == 1:    
-        ac = Aircraft(1, 'A', 37,36,t, nodes_dict) #As an example we will create one aicraft arriving at node 37 with the goal of reaching node 36
-        ac1 = Aircraft(2, 'D', 36,37,t, nodes_dict)#As an example we will create one aicraft arriving at node 36 with the goal of reaching node 37
+    if t == 1:
+        # Create aircraft as examples
+        ac = Aircraft(1, 'A', 37, 36, t, nodes_dict)  # Example aircraft arriving
+        ac1 = Aircraft(2, 'D', 36, 37, t, nodes_dict)  # Example aircraft departing
         aircraft_lst.append(ac)
         aircraft_lst.append(ac1)
+
+        # Generate a flight task (arrival or departure)
+        task1 = generate_flight_task(1)  # Generate task with ID 1
+        
+        # Assign task to the correct depot based on flight type
+        if task1.type == "A":
+            arrival_depot.add_task(task1)
+            arrival_depot.match_task()  # This will assign the task to the available tug
+        else:
+            departure_depot.add_task(task1)
+            departure_depot.match_task()  # This will assign the task to the available tug
+
         
     #Do planning 
     if planner == "Independent":     
@@ -211,3 +237,5 @@ while running:
 # 2. Implement analysis of output data here
 # =============================================================================
 #what data do you want to show?
+
+# %%
