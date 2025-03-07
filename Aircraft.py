@@ -1,4 +1,4 @@
-from single_agent_planner import simple_single_agent_astar
+from single_agent_planner import simple_single_agent_astar, simple_single_agent_astar_prioritized
 import math
 
 class Aircraft(object):
@@ -133,6 +133,30 @@ class Aircraft(object):
                 raise Exception("Something is wrong with the timing of the path planning")
 
     
-
+    def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t):
+        """
+        Plans a path for taxiing aircraft assuming that it knows the entire layout.
+        Other traffic is not taken into account.
+        INPUT:
+            - nodes_dict: copy of the nodes_dict
+            - edges_dict: edges_dict with current edge weights
+        """
+        
+        if self.status == "taxiing":
+            start_node = self.start #node from which planning should be done
+            goal_node = self.goal #node to which planning should be done
+            
+            success, path = simple_single_agent_astar_prioritized(nodes_dict, start_node, goal_node, heuristics, t)
+            if success:
+                self.path_to_goal = path[1:]
+                next_node_id = self.path_to_goal[0][0] #next node is first node in path_to_goal
+                self.from_to = [path[0][0], next_node_id]
+                print("Path AC", self.id, ":", path)
+            else:
+                raise Exception("No solution found for", self.id)
+            
+            #Check the path
+            if path[0][1] != t:
+                raise Exception("Something is wrong with the timing of the path planning")
 
                 

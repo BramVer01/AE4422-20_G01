@@ -151,12 +151,12 @@ if visualization:
 
 #ADDED FROM THE TUG ALLOCATION:
 # Initialize depots
-departure_depot = Depot(1, position=20)  # Departure depot at node 20
-arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+departure_depot = Depot(1, position=112)  # Departure depot at node 20
+arrival_depot = Depot(2, position=113)  # Arrival depot at node 17
 
 # Initialize tugs and add them to their respective depots
-tug1 = Tug(1, position=20, depot=departure_depot)  
-tug2 = Tug(2, position=17, depot=arrival_depot)  
+tug1 = Tug(1, position=(nodes_dict[112]['x_pos'],nodes_dict[112]['y_pos']), depot=departure_depot)
+tug2 = Tug(2, position=(nodes_dict[113]['x_pos'],nodes_dict[113]['y_pos']), depot=arrival_depot)
 
 departure_depot.add_tug(tug1)  
 arrival_depot.add_tug(tug2) 
@@ -211,7 +211,7 @@ while running:
 
     # Move tugs and aircraft attached to them
     for tug in [tug1, tug2]:
-        tug.move(dt, t)  # This will move both the tug and the attached aircraft
+        tug.move(dt, t, nodes_dict)  # This will move both the tug and the attached aircraft
 
     # Do planning
     if planner == "Independent":
