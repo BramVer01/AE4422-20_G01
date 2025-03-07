@@ -1,66 +1,71 @@
 import random
 import time
 from queue import Queue
+from single_agent_planner import simple_single_agent_astar
 
 class Tug:
-    def __init__(self, tug_id, position, depot):
-        self.id = tug_id
-        self.position = position  # Initial position of the tug as a tuple (x, y)
-        self.depot = depot
-        self.current_aircraft = None  # Initially no aircraft attached
-        self.speed = 5    # Define the tug's speed
+    def __init__(self, id, start, goal, status, speed=0.0):
+        self.id = id
+        self.start = start
+        self.goal = goal
+        self.status = status
+        self.speed = speed
+        self.position = (0, 0)  # Default starting position (will be updated)
+        self.path_to_goal = []
+        self.from_to = []
+        self.current_aircraft = None  # Assuming the tug may carry an aircraft
 
-    def assign_task(self, task):
-        self.task = task
-        print(f"Task '{task}' assigned to Tug {self.id}")
-
-    def move(self, dt, t):
-        """Move the tug (and attached aircraft)"""
-        if self.current_aircraft:
-            # Move the aircraft along with the tug
-            self.current_aircraft.position = (self.position[0], self.position[1])
+    def move(self, dt, t, nodes_dict, edges_dict, heuristics):
+        """
+        Move the tug (and attached aircraft) along the planned path.
+        """
+        # Check if the position is valid (tuple with two elements)
+        if not isinstance(self.position, tuple) or len(self.position) != 2:
+            raise TypeError(f"Tug position is not a valid tuple. Current position: {self.position}")
         
-        # Update the tug's position, make sure it stays as a tuple
-        self.position = (self.position[0] + self.speed * dt, self.position[1])  # Update position of tug
+        if self.status == "taxiing" and not self.path_to_goal:
+            self.plan_independent(nodes_dict, edges_dict, heuristics, t)
 
-    def move_tug_with_aircraft(self, dt, t):
-        """
-        Moves the tug and the attached aircraft together.
-        """
+        # If the tug is taxiing and has a planned path
+        if self.status == "taxiing" and self.path_to_goal:
+            if self.position == self.path_to_goal[0]:
+                # Move to the next node in the path if we've reached the current one
+                self.path_to_goal.pop(0)
+                if self.path_to_goal:
+                    self.position = self.path_to_goal[0]
+            else:
+                # Update position along the path, based on speed and time
+                next_node = self.path_to_goal[0]
+                # Move towards the next node in the path
+                self.position = (self.position[0] + self.speed * dt, self.position[1])  # Adjust as needed
+
+        # Update aircraft position, if there is any attached
         if self.current_aircraft:
-            ac_position = self.current_aircraft.position
-            tug_position = self.position
+            self.current_aircraft.position = self.position
 
-            # Calculate direction from tug to aircraft
-            direction = (ac_position[0] - tug_position[0], ac_position[1] - tug_position[1])
-
-            # Normalize direction to ensure consistent speed
-            distance = math.sqrt(direction[0]**2 + direction[1]**2)
-            if distance > 0:
-                direction = (direction[0] / distance, direction[1] / distance)
-
-            # Move the tug and the aircraft towards each other
-            self.position = (tug_position[0] + direction[0] * self.speed * dt,
-                             tug_position[1] + direction[1] * self.speed * dt)
-
-            # Move the aircraft with the tug
-            self.current_aircraft.position = (ac_position[0] + direction[0] * self.speed * dt,
-                                              ac_position[1] + direction[1] * self.speed * dt)
-
-            # Check if the tug and aircraft have reached the goal and detach
-            if self.position == self.current_aircraft.position:
-                self.current_aircraft.status = "taxiing"
-                self.current_aircraft = None
-
-    def request_path(self, task):
+    def plan_independent(self, nodes_dict, edges_dict, heuristics, t):
         """
-        This method could be used to request a path for the tug to follow.
-        You could have the tug request a path from a pathfinding algorithm
-        or some other process based on the task.
+        Plans a path for taxiing the tug to its goal, assuming it knows the entire layout.
+        Other traffic is not taken into account.
         """
-        # Example of what this method might look like
-        print(f"Tug {self.id} is requesting a path for task {task}")
-        # Implement pathfinding or other logic as needed
+        
+        if self.status == "taxiing":
+            start_node = self.start  # Starting node for path planning
+            goal_node = self.goal  # Goal node for path planning
+
+            success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
+            if success:
+                self.path_to_goal = path[1:]  # Remove the start node, as we already know it
+                next_node_id = self.path_to_goal[0][0]  # Next node is the first in the path
+                self.from_to = [path[0][0], next_node_id]
+                print("Path for Tug", self.id, ":", path)
+            else:
+                raise Exception("No solution found for Tug", self.id)
+            
+            # Ensure the timing is correct for path planning
+            if path[0][1] != t:
+                raise Exception("Timing issue in path planning for Tug", self.id)
+
 
 
 class Depot:
@@ -113,13 +118,14 @@ def generate_flight_task(flight_id):
     return FlightTask(flight_id, a_d, start_node, goal_node, spawn_time)
 
 # Creating two depots
-departure_depot = Depot(1, position=112)  # Departure depot at node 20
-arrival_depot = Depot(2, position=113)  # Arrival depot at node 17
+departure_depot = Depot(1, position=20)  # Departure depot at node 20
+arrival_depot = Depot(2, position=17)  # Arrival depot at node 17
+
 
 # Creating tugs for each depot
 
-tug1 = Tug(1, position=(2, 5), depot=departure_depot)  # Use a tuple for position
-tug2 = Tug(2, position=(2, 4), depot=arrival_depot)    # Use a tuple for position
+tug1 = Tug(1, position=(2, 5), depot=departure_depot)  # Position as a tuple
+tug2 = Tug(2, position=(2, 4), depot=arrival_depot)    # Position as a tuple
 
 departure_depot.add_tug(tug1)
 arrival_depot.add_tug(tug2)

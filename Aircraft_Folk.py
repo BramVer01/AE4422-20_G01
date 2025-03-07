@@ -92,7 +92,3 @@ class Aircraft(object):
             if path[0][1] != t:
                 raise Exception("Something is wrong with the timing of the path planning")
 
-    
-
-
-                

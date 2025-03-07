@@ -43,6 +43,7 @@ def import_layout(nodes_file, edges_file):
         - edges_dict = dictionary with edges annd edge properties
         - start_and_goal_locations = dictionary with node ids for arrival runways, departure runways and gates 
     """
+    
     gates_xy = []   #lst with (x,y) positions of gates
     rwy_dep_xy = [] #lst with (x,y) positions of entry points of departure runways
     rwy_arr_xy = [] #lst with (x,y) positions of exit points of arrival runways
