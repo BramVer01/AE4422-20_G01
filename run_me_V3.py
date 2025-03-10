@@ -8,15 +8,15 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import time as timer
 import pygame as pg
+import random  # Add this for the random choice in generating flight tasks
+import time    # Add this for using current time in flight tasks
 from single_agent_planner import calc_heuristics
 from visualization import map_initialization, map_running
 from independent import run_independent_planner
 from prioritized import run_prioritized_planner
 from cbs import run_CBS
-
-from Depot_file import * # for depot class importation
-from Aircraft_V3 import * # for tug class importation
-
+from Depot_file import Depot, FlightTask  # Import specific classes
+from Aircraft_V3 import Tug  # Import the Tug class
 
 
 #%% SET SIMULATION PARAMETERS
@@ -145,6 +145,10 @@ nodes_dict, edges_dict, start_and_goal_locations = import_layout(nodes_file, edg
 graph = create_graph(nodes_dict, edges_dict, plot_graph)
 heuristics = calc_heuristics(graph, nodes_dict)
 
+
+# Initialize list to track all aircraft and tugs
+aircraft_lst = []
+
 # Initialize depots
 departure_depot = Depot(1, position=112)
 arrival_depot = Depot(2, position=113)
@@ -152,7 +156,6 @@ arrival_depot = Depot(2, position=113)
 # Initialize tugs and add them to depots
 tug1 = Tug(tug_id=1, a_d="D", start_node=112, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
 tug2 = Tug(tug_id=2, a_d="A", start_node=113, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
-
 
 # Add tugs to their respective depots
 departure_depot.tugs.put(tug1)
@@ -193,6 +196,7 @@ escape_pressed = False
 time_end = simulation_time
 dt = 0.1 #should be factor of 0.5 (0.5/dt should be integer)
 t= 0
+task_counter = 0
 
 
 print("Simulation Started")
