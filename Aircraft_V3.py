@@ -1,43 +1,44 @@
 from single_agent_planner import simple_single_agent_astar, simple_single_agent_astar_prioritized
 import math
-from run_me_V3 import *
-from Depot_file import *
-from queue import Queue
 
 class Tug(object):
     """Aircraft class, should be used in the creation of new aircraft."""
 
-    def __init__(self, tug_id, a_d, start_node, spawn_time, nodes_dict):
+    def __init__(self, tug_id, a_d, start_node, spawn_time, nodes_dict, heuristics=None):
         """
         Initalisation of aircraft object.
         INPUT:
             - flight_id: [int] unique id for this tug
             - a_d: [str] "a" for arrival flight and "d" for departure flight
             - start_node: node_id of start node
-            - goal_node: node_id of goal node
             - spawn_time: spawn_time of a/c 
             - nodes_dict: copy of the nodes_dict
+            - heuristics: heuristics for path planning
         """
         
         #Fixed parameters
-        self.speed = 0         #how much a/c moves per unit of t
-        self.id = tug_id       #tug_id
-        self.type = a_d           #arrival or departure (A/D), also defines to which depot it will return initially
-        self.spawntime = spawn_time #spawntime
-        self.start = start_node   #start_node_id
-        self.goal = None     #goal_node_id
-        self.nodes_dict = nodes_dict #keep copy of nodes dict
+        self.speed = 5         # Set a default speed (was 0)
+        self.id = tug_id       # tug_id
+        self.type = a_d        # arrival or departure (A/D), also defines to which depot it will return initially
+        self.spawntime = spawn_time # spawntime
+        self.start = start_node   # start_node_id
+        self.goal = None     # goal_node_id
+        self.nodes_dict = nodes_dict # keep copy of nodes dict
         self.coupled = start_node # coupled flight /depot 
-
+        
+        # Add the new fields
+        self.heuristics = heuristics
+        self.current_task = None
+        self.final_goal = None
         
         #Route related
         self.status = 'waiting' 
-        self.path_to_goal = [] #planned path left from current location
+        self.path_to_goal = [] # planned path left from current location
         self.from_to = [0,0]
 
         #State related
         self.heading = 0
-        self.position = (0,0) #xy position on map
+        self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position
 
     def get_heading(self, xy_start, xy_next):
         """
@@ -246,32 +247,27 @@ class Tug(object):
             if path[0][1] != t:
                 raise Exception("Something is wrong with the timing of the path planning")
             
-        def assign_task(self, task):
-            """Assign a flight task to this tug."""
-            self.goal = task.start_node  # First go to the aircraft
-            self.final_goal = task.goal_node  # Then take aircraft to its destination
-            self.status = "taxiing"  # Start moving
-            self.current_task = task
-            self.speed = 5  # Set a speed value when moving (currently initialized as 0)
-            
-        def request_path(self, task):
-            """Request a path to the task start location."""
-            self.start = self.coupled  # Current position
-            success, path = simple_single_agent_astar(self.nodes_dict, self.start, self.goal, self.heuristics, self.spawntime)
-            if success:
-                self.path_to_goal = path[1:]
-                next_node_id = self.path_to_goal[0][0]
-                self.from_to = [path[0][0], next_node_id]
-                self.position = self.nodes_dict[self.start]["xy_pos"]  # Set initial position
-                print(f"Tug {self.id} heading to task at node {self.goal}")
-            else:
-                print(f"No path found for tug {self.id} to task at {self.goal}")
-                self.status = "waiting"
+    def assign_task(self, task):
+        """Assign a flight task to this tug."""
+        self.goal = task.start_node  # First go to the aircraft
+        self.final_goal = task.goal_node  # Then take aircraft to its destination
+        self.status = "taxiing"  # Start moving
+        self.current_task = task
+        self.speed = 5  # Set a speed value when moving
+
+    def request_path(self, task):
+        """Request a path to the task start location."""
+        self.start = self.coupled  # Current position
+        success, path = simple_single_agent_astar(self.nodes_dict, self.start, self.goal, self.heuristics, self.spawntime)
+        if success:
+            self.path_to_goal = path[1:]
+            next_node_id = self.path_to_goal[0][0]
+            self.from_to = [path[0][0], next_node_id]
+            self.position = self.nodes_dict[self.start]["xy_pos"]  # Set initial position
+            print(f"Tug {self.id} heading to task at node {self.goal}")
+        else:
+            print(f"No path found for tug {self.id} to task at {self.goal}")
+            self.status = "waiting"
         
-        def __init__(self, tug_id, a_d, start_node, spawn_time, nodes_dict, heuristics=None):
-            # Existing code...
-            self.heuristics = heuristics
-            self.current_task = None
-            self.final_goal = None
 
                         
