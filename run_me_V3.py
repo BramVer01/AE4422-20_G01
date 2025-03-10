@@ -145,11 +145,23 @@ nodes_dict, edges_dict, start_and_goal_locations = import_layout(nodes_file, edg
 graph = create_graph(nodes_dict, edges_dict, plot_graph)
 heuristics = calc_heuristics(graph, nodes_dict)
 
-departure_depot = Depot(1, position=112)  # Departure depot at node 112
-arrival_depot = Depot(2, position=113)  # Arrival depot at node 113
+# Initialize depots
+departure_depot = Depot(1, position=112)
+arrival_depot = Depot(2, position=113)
 
-tug1 = Tug(tug_id = 1, a_d = a, start_node = 112, spawn_time = 0, nodes_dict = nodes_dict)  
-tug2 = Tug(tug_id = 2, a_d = a, start_node = 112, spawn_time = 0, nodes_dict = nodes_dict)    
+# Initialize tugs and add them to depots
+tug1 = Tug(tug_id=1, a_d="D", start_node=112, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
+tug2 = Tug(tug_id=2, a_d="A", start_node=113, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
+
+
+# Add tugs to their respective depots
+departure_depot.tugs.put(tug1)
+arrival_depot.tugs.put(tug2)
+
+# Add tugs to the aircraft_lst for tracking and visualization
+aircraft_lst.append(tug1)
+aircraft_lst.append(tug2)
+
 
 def generate_flight_task(flight_id): #NIEUW
     """Generates a flight task at a certain frequency."""
@@ -185,18 +197,27 @@ t= 0
 
 print("Simulation Started")
 while running:
-    t= round(t,2)    
-       
-    # Generating a flight task
-    task1 = generate_flight_task(1) #Voor nu 1 task en 1 tug per depot om te checken
-
-    # Assigning tasks to the appropriate depot
-    if task1.type == "A":
-        arrival_depot.add_task(task1)
-        arrival_depot.match_task()
-    else:
-        departure_depot.add_task(task1)
-        departure_depot.match_task()
+    t = round(t, 2)    
+    
+    # Generate new tasks randomly with some probability
+    if random.random() < 0.1:  # 10% chance per time step to generate a new task
+        task_counter += 1
+        new_task_id = task_counter
+        
+        # Generate a flight task
+        task = generate_flight_task(new_task_id)
+        
+        # Assign to appropriate depot
+        if task.type == "A":
+            arrival_depot.add_task(task)
+            print(f"Time {t}: New arrival task {task.flight_id} added to arrival depot (from {task.start_node} to {task.goal_node})")
+        else:
+            departure_depot.add_task(task)
+            print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
+    
+    # Try to match tasks with available tugs
+    arrival_depot.match_task()
+    departure_depot.match_task()
 
     #Check conditions for termination
     if t >= time_end or escape_pressed: 
