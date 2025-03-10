@@ -249,10 +249,10 @@ class Tug(object):
             
     def assign_task(self, task):
         """Assign a flight task to this tug."""
+        self.current_task = task
         self.goal = task.start_node  # First go to the aircraft
         self.final_goal = task.goal_node  # Then take aircraft to its destination
         self.status = "taxiing"  # Start moving
-        self.current_task = task
         self.speed = 5  # Set a speed value when moving
 
     def request_path(self, task):

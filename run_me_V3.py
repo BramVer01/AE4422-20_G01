@@ -11,7 +11,7 @@ import pygame as pg
 import random  # Add this for the random choice in generating flight tasks
 import time    # Add this for using current time in flight tasks
 from single_agent_planner import calc_heuristics
-from visualization import map_initialization, map_running
+from visualization_V3 import map_initialization, map_running
 from independent import run_independent_planner
 from prioritized import run_prioritized_planner
 from cbs import run_CBS
@@ -223,47 +223,48 @@ while running:
     arrival_depot.match_task()
     departure_depot.match_task()
 
-    #Check conditions for termination
+    # Check conditions for termination
     if t >= time_end or escape_pressed: 
         running = False
         pg.quit()
         print("Simulation Stopped")
         break 
     
-    #Visualization: Update map if visualization is true
+    # Visualization: Update map if visualization is true
     if visualization:
-        current_states = {} #Collect current states of all aircraft
+        current_states = {} # Collect current states of all vehicles
         for ac in aircraft_lst:
-            if ac.status == "taxiing":
-                current_states[ac.id] = {"ac_id": ac.id,
-                                         "xy_pos": ac.position,
-                                         "heading": ac.heading}
+            if ac.status == "taxiing" or ac.status == "returning":
+                # Check if this is a tug and whether it has a flight assigned
+                has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
+                
+                current_states[ac.id] = {
+                    "ac_id": ac.id,
+                    "xy_pos": ac.position,
+                    "heading": ac.heading,
+                    "has_flight": has_flight  # This tells the visualization whether to show a tug or aircraft
+                }
+                
         escape_pressed = map_running(map_properties, current_states, t)
-        timer.sleep(visualization_speed) 
+        timer.sleep(visualization_speed)
       
-    #Spawn aircraft for this timestep (use for example a random process)
-    if t == 1:    
-        ac = Aircraft(1, 'A', 37,36,t, nodes_dict) #As an example we will create one aicraft arriving at node 37 with the goal of reaching node 36
-        ac1 = Aircraft(2, 'D', 36,37,t, nodes_dict)#As an example we will create one aicraft arriving at node 36 with the goal of reaching node 37
-        aircraft_lst.append(ac)
-        aircraft_lst.append(ac1)
-        
-    #Do planning 
+    # Do planning 
     if planner == "Independent":     
-        if t == 1: #(Hint: Think about the condition that triggers (re)planning) 
-            run_independent_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
+        for tug in aircraft_lst:
+            if tug.status == "taxiing" and not tug.path_to_goal:
+                tug.plan_independent(nodes_dict, edges_dict, heuristics, t)
     elif planner == "Prioritized":
-        if t == 1:
-            run_prioritized_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
+        for tug in aircraft_lst:
+            if tug.status == "taxiing" and not tug.path_to_goal:
+                tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t)
     elif planner == "CBS":
         run_CBS()
-    #elif planner == -> you may introduce other planners here
     else:
         raise Exception("Planner:", planner, "is not defined.")
                        
-    #Move the aircraft that are taxiing
+    # Move the tugs that are taxiing or returning
     for ac in aircraft_lst: 
-        if ac.status == "taxiing": 
+        if ac.status in ["taxiing", "returning"]: 
             ac.move(dt, t)
                            
     t = t + dt
