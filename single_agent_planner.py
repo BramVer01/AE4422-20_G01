@@ -5,6 +5,7 @@ Consider functions in this file as supporting functions.
 
 import heapq
 import networkx as nx
+import math
 
 def calc_heuristics(graph, nodes_dict):
     """
@@ -118,6 +119,99 @@ def get_path(goal_node):
     #print(path)
     return path
 
+def build_constraint_table(constraints, agent):
+    ##############################
+    # Task 2.2/2.3: Return a table that constains the list of constraints of
+    #               the given agent for each time step. The table can be used
+    #               for a more efficient constraint violation check in the 
+    #               is_constrained function.
+
+    # max_timestep = -1  # the maximum timestep in these constraints
+    # #  collect constraints that are related to this agent
+    # for constraint in constraints:
+    #     if constraint['agent'] == agent:
+    #         max_timestep = max(max_timestep, constraint['timestep'])
+
+    # constraint_table = [[] for _ in range(max_timestep + 1)]
+
+    # for constraint in constraints:
+    #     if constraint['agent'] == agent:
+    #         constraint_table[constraint['timestep']].append({'loc': constraint['loc']})
+
+    # return constraint_table
+
+    positive = []  # to collect positive constraints
+    negative = []  # to collect negative constraints
+    max_timestep = -1  # the maximum timestep in these constraints
+    #  collect constraints that are related to this agent
+    for constraint in constraints:
+        if constraint['positive']:  # positive constraint is effective for everyone
+            if constraint['agent'] == agent:
+                positive.append(constraint)
+            else:
+                negative.append(constraint)
+            max_timestep = max(max_timestep, constraint['timestep'])
+        elif constraint['agent'] == agent:  # negative constraint is effective for only one agent
+            negative.append(constraint)
+            max_timestep = max(max_timestep, constraint['timestep'])
+
+    constraint_table = [[] for _ in range(max_timestep + 1)]
+    for constraint in positive:
+        if len(constraint['loc']) == 1:  # positive vertex constraint
+            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': True})
+        else:  # positive edge constraint
+            constraint_table[constraint['timestep'] - 1].append({'loc': [constraint['loc'][0]], 'positive': True})
+            constraint_table[constraint['timestep']].append({'loc': [constraint['loc'][1]], 'positive': True})
+
+    for constraint in negative:
+        if len(constraint['loc']) == 1:  # vertex constraint
+            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': False})
+        elif constraint['positive']:  # positive edge constraint for other agents
+            constraint_table[constraint['timestep'] - 1].append({'loc': [constraint['loc'][0]], 'positive': False})
+            constraint_table[constraint['timestep']].append({'loc': [constraint['loc'][1]], 'positive': False})
+            constraint_table[constraint['timestep']].append(
+                {'loc': [constraint['loc'][1], constraint['loc'][0]], 'positive': False})
+        else:  # negative edge constraint
+            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': False})
+
+    return constraint_table
+
+def is_constrained(curr_loc, next_loc, next_time, constraint_table):
+    ##############################
+    # Task 2.2/2.3: Check if a move from curr_loc to next_loc at time step next_time violates
+    #               any given constraint. For efficiency the constraints are indexed in a constraint_table
+    #               by time step, see build_constraint_table.
+
+    # if len(constraint_table) <= next_time:
+    #     return False
+
+    # for constraint in constraint_table[next_time]:
+    #     if len(constraint['loc']) == 1:  # vertex constraint
+    #         if constraint['loc'][0] == next_loc:
+    #             return True
+    #     else:  # edge constraint
+    #         if constraint['loc'] == [curr_loc, next_loc]:
+    #             return True
+
+    # return False
+    next_time = int(next_time * 2)
+    if len(constraint_table) <= next_time:
+        return False
+
+    for constraint in constraint_table[next_time]:
+        if constraint['positive']:  # positive constraint
+            if constraint['loc'][0] != next_loc:
+                return True
+        else:  # negative constraint
+            if len(constraint['loc']) == 1:  # vertex constraint
+                if constraint['loc'][0] == next_loc:
+                    return True
+            else:  # edge constraint
+                if constraint['loc'] == [curr_loc, next_loc]:
+                    return True
+
+    return False
+
 def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heuristics, time_start, agent, constraints):
     # def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
     """
@@ -137,7 +231,7 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
     from_node_id = from_node
     goal_node_id = goal_node
     time_start = time_start
-    agent = agent
+    agent = agent.id
     constraint_table = build_constraint_table(constraints, agent)
    
     
@@ -152,14 +246,14 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
         curr = pop_node(open_list)
         if curr['loc'] == goal_node_id and curr['timestep'] >= earliest_goal_timestep:
             found = True
-            if curr['timestep'] + 1 < len(constraint_table):
-                for t in range(curr['timestep'] + 1, len(constraint_table)):
+            if curr['timestep'] + 0.5 < len(constraint_table)/2:
+                for t in range(int((curr['timestep'] + 0.5) * 2), int(len(constraint_table) * 2)):
                     if is_constrained(goal_node_id, goal_node_id, t, constraint_table):
                         found = False
-                        earliest_goal_timestep = t + 1
+                        earliest_goal_timestep = t/2 + 0.5
                         break
             if found:
-                return get_path(curr)
+                return True, get_path(curr)
 
             #return True, get_path(curr) 
             #In tutorial also now for dir in range(5): is used. What for? how to implement?
