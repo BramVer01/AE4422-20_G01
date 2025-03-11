@@ -324,6 +324,7 @@ class Tug(object):
     #             raise Exception("Something is wrong with the timing of the path planning")
 
     #
+    
     def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t, delta_t=0.1, constraints=[]):
         # Allow planning when the tug is in the "moving_to_task" or "executing" state.
         if self.status in ["moving_to_task", "executing"] and not self.path_to_goal:

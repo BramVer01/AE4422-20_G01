@@ -190,16 +190,7 @@ while running:
     
     if visualization:
         current_states = {}
-        # for ac in tug_list:
-        #     # print(f'tug {ac.id} has current location (x, y): ({ac.position})'
-        #     if ac.status == "moving_to_task" or ac.status == "executing" or ac.status == 'to_depod':
-        #         has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
-        #         current_states[ac.id] = {
-        #             "ac_id": ac.id,
-        #             "xy_pos": ac.position,
-        #             "heading": ac.heading,
-        #             "has_flight": has_flight
-        #         }
+
         for ac in tug_list:
             if ac.status in ["moving_to_task", "executing", "to_depod"]:
                 has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
@@ -226,7 +217,7 @@ while running:
     
     if planner == "Prioritized":     
         for tug in tug_list:
-            if tug.status == "moving_to_task" and not tug.path_to_goal:
+            if tug.status in ["moving_to_task", "executing", "to_depod", "returning"]:
                 constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
 
 

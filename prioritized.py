@@ -3,7 +3,7 @@ Implement prioritized planner here
 """
 
 def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints):
-    tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, tug, constraints)
+    tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
     for j in tug_lst:
         if j.id != tug.id:
             previous_node = None
