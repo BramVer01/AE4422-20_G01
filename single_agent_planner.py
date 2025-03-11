@@ -201,7 +201,6 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
 
     # return False
     constraints_at_time = constraint_table.get(next_time, [])
-    print(constraints_at_time)
     for constraint in constraints_at_time:
         if constraint['positive']:
             # For a positive constraint, the move is only allowed if next_loc matches.
@@ -264,8 +263,11 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
             else:
                 return True, get_path(curr)
         
+        neighbors = nodes_dict[curr['loc']]["neighbors"].copy()
+        neighbors.add(curr['loc']) # Adding the "wait" action as a valid neighbor.
+
         # Expand each neighbor from the current node.
-        for neighbor in nodes_dict[curr['loc']]["neighbors"]:
+        for neighbor in neighbors:
             new_time = curr['timestep'] + delta_t
             # If using constraints, skip this neighbor if a constraint is active.
             if constraint_table is not None and is_constrained(curr['loc'], neighbor, new_time, constraint_table):

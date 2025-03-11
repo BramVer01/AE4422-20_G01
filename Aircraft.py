@@ -82,13 +82,25 @@ class Aircraft(object):
         distance_to_move = self.speed*dt #distance to move in this timestep
   
         #Update position with rounded values
-        x = xy_to[0]-xy_from[0]
-        y = xy_to[1]-xy_from[1]
-        x_normalized = x / math.sqrt(x**2+y**2)
-        y_normalized = y / math.sqrt(x**2+y**2)
-        posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
-        posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
-        self.position = (posx, posy)  
+        if xy_from == xy_to:
+            # Waiting: position remains the same.
+            self.position = xy_from
+        else:
+            x = xy_to[0]-xy_from[0]
+            y = xy_to[1]-xy_from[1]
+            distance = math.sqrt(x**2+y**2)
+        
+            if distance == 0:
+                x_normalized = 0
+                y_normalized = 0
+            else:    
+                x_normalized = x / distance
+                y_normalized = y / distance
+
+            posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
+            posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
+            self.position = (posx, posy)  
+        
         self.get_heading(xy_from, xy_to)	
 
         #Check if goal is reached or if to_node is reached
