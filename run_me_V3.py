@@ -139,8 +139,8 @@ print("Simulation Started")
 while running:
     t = round(t, 2)    
 
-    # create task at t = 0 and every 10 time steps 
-    if t == 0 or (t % 10 == 0):  
+    # create task at t = 0 and every 3 time steps 
+    if t == 0 or (t % 3 == 0):  
         task_counter += 1
         new_task_id = task_counter
         task = generate_flight_task(new_task_id)
@@ -153,11 +153,16 @@ while running:
     
     # print status' of the depods every 10 time steps 
     if t == 0 or (t % 10 == 0):  
+        dep_tugs_ids = [tug.id for tug in departure_depot.tugs.queue]
+        dep_tasks_ids = [task.flight_id for task in departure_depot.tasks.queue]
+        arr_tugs_ids = [tug.id for tug in arrival_depot.tugs.queue]
+        arr_tasks_ids = [task.flight_id for task in arrival_depot.tasks.queue]
+        
         print(f"\n--- Time {t} Depot Queues ---")
-        print("Departure Depot Tugs:", list(departure_depot.tugs.queue))
-        print("Departure Depot Tasks:", list(departure_depot.tasks.queue))
-        print("Arrival Depot Tugs:", list(arrival_depot.tugs.queue))
-        print("Arrival Depot Tasks:", list(arrival_depot.tasks.queue))
+        print("Departure Depot Tugs:", dep_tugs_ids)
+        print("Departure Depot Tasks:", dep_tasks_ids)
+        print("Arrival Depot Tugs:", arr_tugs_ids)
+        print("Arrival Depot Tasks:", arr_tasks_ids)
         print("-------------------------------\n")
 
     arrival_depot.match_task(t)
@@ -171,16 +176,27 @@ while running:
     
     if visualization:
         current_states = {}
+        # for ac in tug_list:
+        #     # print(f'tug {ac.id} has current location (x, y): ({ac.position})'
+        #     if ac.status == "moving_to_task" or ac.status == "executing" or ac.status == 'to_depod':
+        #         has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
+        #         current_states[ac.id] = {
+        #             "ac_id": ac.id,
+        #             "xy_pos": ac.position,
+        #             "heading": ac.heading,
+        #             "has_flight": has_flight
+        #         }
         for ac in tug_list:
-            # print(f'tug {ac.id} has current location (x, y): ({ac.position})'
-            if ac.status == "moving_to_task" or ac.status == "executing" or ac.status == 'to_depod':
+            if ac.status in ["moving_to_task", "executing", "to_depod"]:
                 has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
                 current_states[ac.id] = {
                     "ac_id": ac.id,
                     "xy_pos": ac.position,
                     "heading": ac.heading,
-                    "has_flight": has_flight
+                    "has_flight": has_flight,
+                    "status": ac.status
                 }
+
         escape_pressed = map_running(map_properties, current_states, t)
         timer.sleep(visualization_speed)
       
@@ -208,5 +224,18 @@ while running:
         if tug.status in ["moving_to_task", "executing", "to_depod", "returning"]:
             tug.move(dt, t)
 
+
+    # Check for idle tugs that have reached the depot and update depot queues
+    for tug in tug_list:
+        if tug.status == "idle":
+            if tug.type == "D" and tug.coupled == departure_depot.position:
+                if tug not in departure_depot.tugs.queue:
+                    departure_depot.tugs.put(tug)
+                    print(f"Tug {tug.id} has returned to the departure depot.")
+            elif tug.type == "A" and tug.coupled == arrival_depot.position:
+                if tug not in arrival_depot.tugs.queue:
+                    arrival_depot.tugs.put(tug)
+                    print(f"Tug {tug.id} has returned to the arrival depot.")
+                           
                             
     t = t + dt
