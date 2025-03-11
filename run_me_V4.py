@@ -32,8 +32,8 @@ plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
 visualization_speed = 0.1 #set at 0.1 as default
 
-task_interval = 1    # New: generate a task every 3 seconds
-total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+task_interval = 5    # New: generate a task every 5 seconds
+total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
 
 
 #%%Function definitions
