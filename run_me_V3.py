@@ -25,7 +25,7 @@ nodes_file = "nodes.xlsx" #xlsx file with for each node: id, x_pos, y_pos, type
 edges_file = "edges.xlsx" #xlsx file with for each edge: from  (node), to (node), length
 
 #Parameters that can be changed:
-simulation_time = 20
+simulation_time = 100
 planner = "Prioritized" #choose which planner to use (currently only Independent is implemented)
 
 #Visualization (can also be changed)
