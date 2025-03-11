@@ -297,31 +297,52 @@ class Tug(object):
                 raise Exception("Something is wrong with the timing of the path planning")
 
     
-    def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t):
-        """
-        Plans a path for taxiing aircraft assuming that it knows the entire layout.
-        Other traffic is not taken into account.
-        INPUT:
-            - nodes_dict: copy of the nodes_dict
-            - edges_dict: edges_dict with current edge weights
-        """
+    # def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t):
+    #     """
+    #     Plans a path for taxiing aircraft assuming that it knows the entire layout.
+    #     Other traffic is not taken into account.
+    #     INPUT:
+    #         - nodes_dict: copy of the nodes_dict
+    #         - edges_dict: edges_dict with current edge weights
+    #     """
         
-        if self.status == "taxiing":
-            start_node = self.start #node from which planning should be done
-            goal_node = self.goal #node to which planning should be done
+    #     if self.status == "taxiing":
+    #         start_node = self.start #node from which planning should be done
+    #         goal_node = self.goal #node to which planning should be done
             
-            success, path = simple_single_agent_astar_prioritized(nodes_dict, start_node, goal_node, heuristics, t)
+    #         success, path = simple_single_agent_astar_prioritized(nodes_dict, start_node, goal_node, heuristics, t)
+    #         if success:
+    #             self.path_to_goal = path[1:]
+    #             next_node_id = self.path_to_goal[0][0] #next node is first node in path_to_goal
+    #             self.from_to = [path[0][0], next_node_id]
+    #             print("Path tug", self.id, ":", path)
+    #         else:
+    #             raise Exception("No solution found for", self.id)
+            
+    #         #Check the path
+    #         if path[0][1] != t:
+    #             raise Exception("Something is wrong with the timing of the path planning")
+
+    def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t, delta_t=0.1, constraints=[]):
+        # Allow planning when the tug is in the "moving_to_task" or "executing" state.
+        if self.status in ["moving_to_task", "executing"] and not self.path_to_goal:
+            start_node = self.start
+            goal_node = self.goal
+            # Call the prioritized A* function with the extra parameters.
+            success, path = simple_single_agent_astar_prioritized(
+                nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
+            )
             if success:
                 self.path_to_goal = path[1:]
-                next_node_id = self.path_to_goal[0][0] #next node is first node in path_to_goal
+                next_node_id = self.path_to_goal[0][0]
                 self.from_to = [path[0][0], next_node_id]
-                print("Path tug", self.id, ":", path)
+                print("Path (prioritized) for tug", self.id, ":", path)
             else:
-                raise Exception("No solution found for", self.id)
+                raise Exception("No solution found for tug", self.id)
             
-            #Check the path
+            # Optionally, verify that the planning start time matches.
             if path[0][1] != t:
-                raise Exception("Something is wrong with the timing of the path planning")
+                raise Exception("Timing error in path planning for tug", self.id)
 
 
     # def assign_task(self, task):

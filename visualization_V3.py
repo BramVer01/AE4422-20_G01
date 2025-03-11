@@ -265,16 +265,6 @@ def map_running(map_properties, current_states, t):
         time_str = str(t).zfill(2)
         plot_text(scr, time_str, black, 25, reso, min_x + 0.90 * x_range, max_y - 0.06 * y_range, min_x, max_y, x_range, y_range)
 
-    # if disp_aircaft_id:
-    #     for vehicle in current_states.keys():
-    #         label = 'TUG: ' if not current_states[vehicle].get("has_flight", False) else 'TUG: '
-    #         id_string = label + str(current_states[vehicle]["ac_id"])
-    #         col = orange if not current_states[vehicle].get("has_flight", False) else red
-    #         plot_text(scr, id_string, col, 14, reso, 
-    #                   current_states[vehicle]["xy_pos"][0], 
-    #                   current_states[vehicle]["xy_pos"][1], 
-    #                   min_x, max_y, x_range, y_range, 0, 25)
-
     if disp_aircaft_id:
         for vehicle in current_states.keys():
             label = 'TUG: '

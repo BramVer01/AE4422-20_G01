@@ -23,6 +23,10 @@ plot_graph = False
 visualization = True
 visualization_speed = 0.1
 
+task_interval = 1    # New: generate a task every 3 seconds
+total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+
+
 #%%Function definitions
 def import_layout(nodes_file, edges_file):
     gates_xy = []
@@ -107,12 +111,19 @@ departure_depot = Depot(1, position=112)
 arrival_depot = Depot(2, position=113)
 
 # Initialize tugs and add them to depots
-tug1 = Tug(tug_id=1, a_d="D", start_node=112, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
-tug2 = Tug(tug_id=2, a_d="A", start_node=113, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
-departure_depot.tugs.put(tug1)
-arrival_depot.tugs.put(tug2)
-tug_list.append(tug1)
-tug_list.append(tug2)
+# Initialize tugs and add them to depots based on total_tugs parameter
+for i in range(total_tugs):
+    tug_id = i + 1
+    if i < total_tugs // 2:
+        # First half: departure tugs (type "D")
+        tug = Tug(tug_id=tug_id, a_d="D", start_node=departure_depot.position, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
+        departure_depot.tugs.put(tug)
+    else:
+        # Second half: arrival tugs (type "A")
+        tug = Tug(tug_id=tug_id, a_d="A", start_node=arrival_depot.position, spawn_time=0, nodes_dict=nodes_dict, heuristics=heuristics)
+        arrival_depot.tugs.put(tug)
+    tug_list.append(tug)
+
 
 def generate_flight_task(flight_id):
     a_d = random.choice(["A", "D"])
@@ -139,8 +150,8 @@ print("Simulation Started")
 while running:
     t = round(t, 2)    
 
-    # create task at t = 0 and every 3 time steps 
-    if t == 0 or (t % 3 == 0):  
+    # Create task at t = 0 and every task_interval seconds.
+    if abs(t - round(t)) < 1e-9 and (round(t) % task_interval == 0):
         task_counter += 1
         new_task_id = task_counter
         task = generate_flight_task(new_task_id)
@@ -150,6 +161,7 @@ while running:
         else:
             departure_depot.add_task(task)
             print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
+
     
     # print status' of the depods every 10 time steps 
     if t == 0 or (t % 10 == 0):  
@@ -214,6 +226,7 @@ while running:
         for tug in tug_list:
             if tug.status == "moving_to_task" and not tug.path_to_goal:
                 tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t)
+
 
     # elif planner == "CBS":
     #     run_CBS()
