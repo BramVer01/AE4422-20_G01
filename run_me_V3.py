@@ -145,6 +145,8 @@ time_end = simulation_time
 dt = 0.1
 t = 0
 task_counter = 0
+delta_t = 0.5
+constraints = []
 
 print("Simulation Started")
 while running:
@@ -221,11 +223,11 @@ while running:
     #     for tug in tug_list:
     #         if tug.status == "taxiing" and not tug.path_to_goal:
     #             tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t)
-
+    
     if planner == "Prioritized":     
         for tug in tug_list:
             if tug.status == "moving_to_task" and not tug.path_to_goal:
-                tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t)
+                constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
 
 
     # elif planner == "CBS":
