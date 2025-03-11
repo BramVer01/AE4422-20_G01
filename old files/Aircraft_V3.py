@@ -17,7 +17,7 @@ class Tug(object):
         """
         
         #Fixed parameters
-        self.speed = 5         # Set a default speed (was 0)
+        self.speed = 1         # Set a default speed (was 0)
         self.id = tug_id       # tug_id
         self.type = a_d        # arrival or departure (A/D), also defines to which depot it will return initially
         self.spawntime = spawn_time # spawntime
@@ -34,7 +34,7 @@ class Tug(object):
         # Route related
 
 
-        self.status = 'idle' # idle, moving_to_task, executing, to_depod
+        self.status = 'idle' # idle, moving_to_task, executing, to_depot
         self.path_to_goal = [] # planned path left from current location
         self.from_to = [0,0]
 
@@ -200,7 +200,7 @@ class Tug(object):
         """
         Moves a tug between nodes and manages state transitions.
         """
-        if self.status not in ["moving_to_task", "executing", "to_depod"]:
+        if self.status not in ["moving_to_task", "executing", "to_depot"]:
             print(f"Tug {self.id} is not moving because status is {self.status}")
             return
 
@@ -257,13 +257,13 @@ class Tug(object):
                     self.request_path()
                 elif self.status == "executing":
                     # Reached the aircraft's destination.
-                    print(f"Tug {self.id} delivered task. Switching status to to_depod.")
-                    self.status = "to_depod"
+                    print(f"Tug {self.id} delivered task. Switching status to to_depot.")
+                    self.status = "to_depot"
                     depot_node = 112 if self.type == "D" else 113
                     self.goal = depot_node
                     self.coupled = to_node
                     self.request_path()
-                elif self.status == "to_depod":
+                elif self.status == "to_depot":
                     # Reached the depot.
                     # print(f"Tug {self.id} returned to depot at node {to_node}. Setting status to idle.")
                     self.status = "idle"
@@ -325,7 +325,7 @@ class Tug(object):
 
     #
     
-    def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t, delta_t=0.1, constraints=[]):
+    def plan_prioritized(self, nodes_dict, edges_dict, heuristics, t, delta_t=0.5, constraints=[]):
         # Allow planning when the tug is in the "moving_to_task" or "executing" state.
         if self.status in ["moving_to_task", "executing"] and not self.path_to_goal:
             start_node = self.start
@@ -367,7 +367,7 @@ class Tug(object):
         self.status = "moving_to_task"
         print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
         # Request a path to the pickup location.
-        self.request_path(use_prioritized=True, delta_t=0.1, constraints=[])
+        self.request_path(use_prioritized=True, delta_t=0.5, constraints=[])
 
 
     # def request_path(self):
@@ -385,7 +385,7 @@ class Tug(object):
     #         print(f"No path found for tug {self.id} to goal {self.goal}")
     #         self.status = "idle"
 
-    def request_path(self, use_prioritized=False, t=None, delta_t=0.1, constraints=[]):
+    def request_path(self, use_prioritized=False, t=None, delta_t=0.5, constraints=[]):
         print(f"Tug {self.id} is requesting path from {self.coupled} to {self.goal}")
         self.start = self.coupled  # use current position as starting node
         if use_prioritized and t is not None:

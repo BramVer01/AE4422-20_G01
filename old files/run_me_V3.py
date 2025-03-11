@@ -165,7 +165,7 @@ while running:
             print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
 
     
-    # print status' of the depods every 10 time steps 
+    # print status' of the depots every 10 time steps 
     if t == 0 or (t % 10 == 0):  
         dep_tugs_ids = [tug.id for tug in departure_depot.tugs.queue]
         dep_tasks_ids = [task.flight_id for task in departure_depot.tasks.queue]
@@ -192,7 +192,7 @@ while running:
         current_states = {}
 
         for ac in tug_list:
-            if ac.status in ["moving_to_task", "executing", "to_depod"]:
+            if ac.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(ac, 'current_task') and ac.current_task is not None
                 current_states[ac.id] = {
                     "ac_id": ac.id,
@@ -217,7 +217,7 @@ while running:
     
     if planner == "Prioritized":     
         for tug in tug_list:
-            if tug.status in ["moving_to_task", "executing", "to_depod", "returning"]:
+            if tug.status in ["moving_to_task", "executing", "to_depot", "returning"]:
                 constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
 
 
@@ -227,7 +227,7 @@ while running:
         raise Exception("Planner:", planner, "is not defined.")
                        
     for tug in tug_list:
-        if tug.status in ["moving_to_task", "executing", "to_depod", "returning"]:
+        if tug.status in ["moving_to_task", "executing", "to_depot", "returning"]:
             tug.move(dt, t)
 
 
