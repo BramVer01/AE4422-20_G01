@@ -366,22 +366,44 @@ class Tug(object):
         self.status = "moving_to_task"
         print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
         # Request a path to the pickup location.
-        self.request_path()
+        self.request_path(use_prioritized=True, delta_t=0.1, constraints=[])
 
-    def request_path(self):
-        """Request a path based on the current goal."""
+
+    # def request_path(self):
+    #     """Request a path based on the current goal."""
+    #     print(f"Tug {self.id} is requesting path from {self.coupled} to {self.goal}")
+    #     self.start = self.coupled  # use current position as starting node
+    #     success, path = simple_single_agent_astar(self.nodes_dict, self.start, self.goal, self.heuristics, self.spawntime)
+    #     if success:
+    #         self.path_to_goal = path[1:]
+    #         next_node_id = self.path_to_goal[0][0]
+    #         self.from_to = [path[0][0], next_node_id]
+    #         self.position = self.nodes_dict[self.start]["xy_pos"]
+    #         # print(f"Tug {self.id} obtained path: {self.path_to_goal} with from_to: {self.from_to}")
+    #     else:
+    #         print(f"No path found for tug {self.id} to goal {self.goal}")
+    #         self.status = "idle"
+
+    def request_path(self, use_prioritized=False, t=None, delta_t=0.1, constraints=[]):
         print(f"Tug {self.id} is requesting path from {self.coupled} to {self.goal}")
         self.start = self.coupled  # use current position as starting node
-        success, path = simple_single_agent_astar(self.nodes_dict, self.start, self.goal, self.heuristics, self.spawntime)
+        if use_prioritized and t is not None:
+            success, path = simple_single_agent_astar_prioritized(
+                self.nodes_dict, self.start, self.goal, self.heuristics, t, delta_t, self, constraints
+            )
+        else:
+            success, path = simple_single_agent_astar(
+                self.nodes_dict, self.start, self.goal, self.heuristics, self.spawntime
+            )
         if success:
             self.path_to_goal = path[1:]
             next_node_id = self.path_to_goal[0][0]
             self.from_to = [path[0][0], next_node_id]
             self.position = self.nodes_dict[self.start]["xy_pos"]
-            # print(f"Tug {self.id} obtained path: {self.path_to_goal} with from_to: {self.from_to}")
         else:
             print(f"No path found for tug {self.id} to goal {self.goal}")
             self.status = "idle"
+
 
     # def request_path(self, task):
     #     """Request a path to the task start location."""
