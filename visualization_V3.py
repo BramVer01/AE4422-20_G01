@@ -52,7 +52,7 @@ def c2m_x(x_coord, min_x, reso_x, x_range, shift=0):
 def c2m_y(y_coord, max_y, reso_y, y_range, shift=0):
     return int(((float(y_coord - max_y) / y_range) * reso_y) * -1 - shift)
 
-def plot_vehicle(scr, reso, deg, x, y, x0, y0, x_range, y_range, is_tug=False, x_shift=0, y_shift=0):
+def plot_vehicle(scr, reso, deg, x, y, x0, y0, x_range, y_range, is_tug, x_shift=0, y_shift=0):
     plane_map_x = c2m_x(x, x0, reso[0], x_range, x_shift)
     plane_map_y = c2m_y(y, y0, reso[1], y_range, y_shift)
     
@@ -256,7 +256,10 @@ def map_running(map_properties, current_states, t):
             heading = int(current_states[vehicle]["heading"])
             x_pos = current_states[vehicle]["xy_pos"][0]
             y_pos = current_states[vehicle]["xy_pos"][1]
-            is_tug = not current_states[vehicle].get("has_flight", False)
+            if current_states[vehicle]['status'] == 'moving_to_task' or current_states[vehicle]['status'] == 'to_depod':
+                is_tug = True
+            else:
+                is_tug = False
             plot_vehicle(scr, reso, heading, x_pos, y_pos, min_x, max_y, x_range, y_range, is_tug)
             
     if disp_time:
