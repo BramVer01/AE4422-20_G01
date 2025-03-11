@@ -194,7 +194,7 @@ while running:
             run_independent_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
     elif planner == "Prioritized":
         if t == 1:
-            run_prioritized_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t)
+            run_prioritized_planner(aircraft_lst, nodes_dict, edges_dict, heuristics, t, 0.5)
     elif planner == "CBS":
         run_CBS()
     #elif planner == -> you may introduce other planners here

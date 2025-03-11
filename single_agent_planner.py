@@ -119,7 +119,7 @@ def get_path(goal_node):
     #print(path)
     return path
 
-def build_constraint_table(constraints, agent):
+def build_constraint_table(constraints, agent, delta_t):
     ##############################
     # Task 2.2/2.3: Return a table that constains the list of constraints of
     #               the given agent for each time step. The table can be used
@@ -140,39 +140,45 @@ def build_constraint_table(constraints, agent):
 
     # return constraint_table
 
-    positive = []  # to collect positive constraints
-    negative = []  # to collect negative constraints
-    max_timestep = -1  # the maximum timestep in these constraints
-    #  collect constraints that are related to this agent
+    positive = []  # constraints that apply to everyone (or for agent, if positive)
+    negative = []  # constraints that only apply to the given agent
+
+    # Separate constraints based on agent and positive flag.
     for constraint in constraints:
-        if constraint['positive']:  # positive constraint is effective for everyone
+        if constraint['positive']:
             if constraint['agent'] == agent:
                 positive.append(constraint)
             else:
-                negative.append(constraint)
-            max_timestep = max(max_timestep, constraint['timestep'])
-        elif constraint['agent'] == agent:  # negative constraint is effective for only one agent
+                positive.append(constraint)
+        elif constraint['agent'] == agent:
             negative.append(constraint)
-            max_timestep = max(max_timestep, constraint['timestep'])
 
-    constraint_table = [[] for _ in range(max_timestep + 1)]
+    constraint_table = {}
+
+    # Process positive constraints.
     for constraint in positive:
-        if len(constraint['loc']) == 1:  # positive vertex constraint
-            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': True})
-        else:  # positive edge constraint
-            constraint_table[constraint['timestep'] - 1].append({'loc': [constraint['loc'][0]], 'positive': True})
-            constraint_table[constraint['timestep']].append({'loc': [constraint['loc'][1]], 'positive': True})
-
-    for constraint in negative:
+        t = constraint['timestep']
         if len(constraint['loc']) == 1:  # vertex constraint
-            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': False})
-        elif constraint['positive']:  # positive edge constraint for other agents
-            constraint_table[constraint['timestep'] - 1].append({'loc': [constraint['loc'][0]], 'positive': False})
-            constraint_table[constraint['timestep']].append({'loc': [constraint['loc'][1]], 'positive': False})
-            constraint_table[constraint['timestep']].append(
-                {'loc': [constraint['loc'][1], constraint['loc'][0]], 'positive': False})
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': True})
+        else:  # edge constraint: split into two parts using delta_t instead of 1.
+            t_from = t - delta_t
+            t_to = t
+            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': True})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': True})
+
+    # Process negative constraints.
+    for constraint in negative:
+        t = constraint['timestep']
+        if len(constraint['loc']) == 1:  # vertex constraint
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False})
+        elif constraint.get('positive', False):  # if for some reason a positive edge constraint is here for other agents
+            t_from = t - delta_t
+            t_to = t
+            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': False})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': False})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1], constraint['loc'][0]], 'positive': False})
         else:  # negative edge constraint
-            constraint_table[constraint['timestep']].append({'loc': constraint['loc'], 'positive': False})
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False})
 
     return constraint_table
 
@@ -194,25 +200,25 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     #             return True
 
     # return False
-    next_time = int(next_time * 2)
-    if len(constraint_table) <= next_time:
-        return False
-
-    for constraint in constraint_table[next_time]:
-        if constraint['positive']:  # positive constraint
-            if constraint['loc'][0] != next_loc:
+    constraints_at_time = constraint_table.get(next_time, [])
+    print(constraints_at_time)
+    for constraint in constraints_at_time:
+        if constraint['positive']:
+            # For a positive constraint, the move is only allowed if next_loc matches.
+            if constraint['loc'][0][0] != next_loc:
                 return True
-        else:  # negative constraint
-            if len(constraint['loc']) == 1:  # vertex constraint
-                if constraint['loc'][0] == next_loc:
+        else:
+            # For a negative constraint, if it's a vertex constraint check for equality.
+            if len(constraint['loc']) == 1:
+                if constraint['loc'][0][0] == next_loc:
                     return True
-            else:  # edge constraint
-                if constraint['loc'] == [curr_loc, next_loc]:
+            else:
+                # For an edge constraint, check if the move matches the edge.
+                if [constraint['loc'][0][0], constraint['loc'][1][0]] == [curr_loc, next_loc]:
                     return True
-
     return False
 
-def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heuristics, time_start, agent, constraints):
+def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heuristics, time_start, delta_t, agent, constraints):
     # def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
     """
     Single agent A* search. Time start can only be the time that an agent is at a node.
@@ -228,49 +234,56 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
         - path = list of tuples with (loc, timestep) pairs -> example [(37, 1), (101, 2)]. Empty list if success == False.
     """
     
-    from_node_id = from_node
-    goal_node_id = goal_node
     time_start = time_start
     agent = agent.id
-    constraint_table = build_constraint_table(constraints, agent)
-   
-    
+    constraint_table = build_constraint_table(constraints, agent, delta_t)
+
     open_list = []
-    closed_list = dict()
+    closed_list = {}
     earliest_goal_timestep = time_start
-    h_value = heuristics[from_node_id][goal_node_id]
-    root = {'loc': from_node_id, 'g_val': 0, 'h_val': h_value, 'parent': None, 'timestep': time_start}
+    h_value = heuristics[from_node][goal_node]
+    root = {'loc': from_node, 'g_val': 0, 'h_val': h_value, 'parent': None, 'timestep': time_start}
     push_node(open_list, root)
     closed_list[(root['loc'], root['timestep'])] = root
+
     while len(open_list) > 0:
         curr = pop_node(open_list)
-        if curr['loc'] == goal_node_id and curr['timestep'] >= earliest_goal_timestep:
-            found = True
-            if curr['timestep'] + 0.5 < len(constraint_table)/2:
-                for t in range(int((curr['timestep'] + 0.5) * 2), int(len(constraint_table) * 2)):
-                    if is_constrained(goal_node_id, goal_node_id, t, constraint_table):
-                        found = False
-                        earliest_goal_timestep = t/2 + 0.5
-                        break
-            if found:
-                return True, get_path(curr)
-
-            #return True, get_path(curr) 
-            #In tutorial also now for dir in range(5): is used. What for? how to implement?
         
+        # Check if goal is reached and no future constraint blocks the goal.
+        if curr['loc'] == goal_node and curr['timestep'] >= earliest_goal_timestep:
+            if constraint_table is not None:
+                found = True
+                for t in sorted(constraint_table.keys()):
+                    if t >= curr['timestep'] + delta_t:
+                        if is_constrained(goal_node, goal_node, t, constraint_table):
+                            found = False
+                            earliest_goal_timestep = t + delta_t
+                            break
+                if found:
+                    return True, get_path(curr)
+            else:
+                return True, get_path(curr)
+        
+        # Expand each neighbor from the current node.
         for neighbor in nodes_dict[curr['loc']]["neighbors"]:
+            new_time = curr['timestep'] + delta_t
+            # If using constraints, skip this neighbor if a constraint is active.
+            if constraint_table is not None and is_constrained(curr['loc'], neighbor, new_time, constraint_table):
+                continue
             child = {'loc': neighbor,
-                    'g_val': curr['g_val'] + 0.5,
-                    'h_val': heuristics[neighbor][goal_node_id],
+                    'g_val': curr['g_val'] + delta_t,  # update cost as needed
+                    'h_val': heuristics[neighbor][goal_node],
                     'parent': curr,
-                    'timestep': curr['timestep'] + 0.5}
-            if (child['loc'], child['timestep']) in closed_list:
-                existing_node = closed_list[(child['loc'], child['timestep'])]
+                    'timestep': new_time}
+            key = (child['loc'], child['timestep'])
+            if key in closed_list:
+                existing_node = closed_list[key]
                 if compare_nodes(child, existing_node):
-                    closed_list[(child['loc'], child['timestep'])] = child
+                    closed_list[key] = child
                     push_node(open_list, child)
             else:
-                closed_list[(child['loc'], child['timestep'])] = child
+                closed_list[key] = child
                 push_node(open_list, child)
-    print("No path found, "+str(len(closed_list))+" nodes visited")
-    return False, [] # Failed to find solutions
+
+    print("No path found, visited", len(closed_list), "nodes")
+    return False, []
