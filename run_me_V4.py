@@ -271,8 +271,10 @@ def run_simulation(visualization_speed, task_interval, total_tugs):
                     print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
 
         
-        # print status' of the depots every 10 time steps 
+        
         if t == 0 or (t % 10 == 0):  
+            
+            # print status' of the depots every 10 time steps 
             dep_tugs_ids = [tug.id for tug in departure_depot.tugs.queue]
             dep_tasks_ids = [task.flight_id for task in departure_depot.tasks.queue]
             arr_tugs_ids = [tug.id for tug in arrival_depot.tugs.queue]
@@ -284,6 +286,15 @@ def run_simulation(visualization_speed, task_interval, total_tugs):
             print("Arrival Depot Tugs:", arr_tugs_ids)
             print("Arrival Depot Tasks:", arr_tasks_ids)
             print("-------------------------------\n")
+
+            # print statuses of all tugs every 10 time steps
+            for tug in tug_list:
+                print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
+                if hasattr(tug, 'path'):
+                    print(f"  Current path: {tug.path}")
+                else:
+                    print("  Current path: None")
+
 
         arrival_depot.match_task(t)
         departure_depot.match_task(t)

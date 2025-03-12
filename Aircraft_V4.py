@@ -187,6 +187,7 @@ class Tug(object):
                 self.wait = False
                 print("Path (prioritized) for tug", self.id, ":", path)
             else:
+                # this is new to prevent the simulation from stopping when no path is found using prio A*
                 success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
 
                 if success:
