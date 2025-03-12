@@ -170,16 +170,43 @@ for i in range(total_tugs):
     tug_list.append(tug)
 
 
-def generate_flight_task(flight_id):
+def generate_flight_task(flight_id, t):
     a_d = random.choice(["A", "D"])
-    if a_d == "A":
+
+    if a_d == "A":  # Arrival
         start_node = random.choice([37, 38])
-        goal_node = random.choice([97, 34, 35, 36, 98])
-    else:
-        start_node = random.choice([97, 34, 35, 36, 98])
-        goal_node = random.choice([1, 2])
-    spawn_time = time.time()
-    return FlightTask(flight_id, a_d, start_node, goal_node, spawn_time)
+        
+        # Find an available gate
+        available_gates = [gate for gate in [97, 34, 35, 36, 98] if gate not in gate_status]
+        if available_gates:
+            goal_node = random.choice(available_gates)
+            gate_status[goal_node] = {"release_time": t + 10, "flight_id": flight_id}
+            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+10}")
+        else:
+            goal_node = "waiting"  # No free gates, aircraft must wait
+            print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
+    
+    else:  # Departure
+        # Look for aircraft that have been waiting 10 timesteps
+        ready_flights = [gate for gate, info in gate_status.items() if info["release_time"] <= t]
+        if not ready_flights:
+            return None  # No aircraft ready to depart
+
+        start_node = random.choice(ready_flights)
+        goal_node = random.choice([1, 2])  # Depart to runway
+        
+        departing_flight_id = gate_status[start_node]["flight_id"]  # Get the flight that was at this gate
+        
+        # Remove the gate from gate_status
+        del gate_status[start_node]
+
+        print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
+
+        return FlightTask(departing_flight_id, "D", start_node, goal_node, time.time())  # Use same flight_id
+
+    return FlightTask(flight_id, a_d, start_node, goal_node, time.time())
+
+
 
 if visualization:
     map_properties = map_initialization(nodes_dict, edges_dict) #visualization properties
@@ -197,21 +224,50 @@ t= 0
 task_counter = 0
 delta_t = 0.5
 constraints = []
+gate_status = {}  # {gate_id: {"release_time": t+10, "flight_id": X}}
+
 
 print("Simulation Started")
 while running:
     t= round(t,2)    
     # Create task at t = 0 and every task_interval seconds.
+    for gate, info in list(gate_status.items()):
+        if info["release_time"] <= t:  # Aircraft is ready to depart
+            print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure.")
+        
+        # Create a departure task
+            task = FlightTask(info["flight_id"], "D", gate, random.choice([1, 2]), time.time())
+        
+            if task:
+                departure_depot.add_task(task)
+                print(f"Time {t}: Departure task for Aircraft {info['flight_id']} created (from {gate} to runway).")
+
+            del gate_status[gate]
+        
+            # Check if there is a waiting aircraft
+            if "waiting_aircraft" in globals() and waiting_aircraft:
+                next_aircraft = waiting_aircraft.pop(0)
+                gate_status[gate] = {"release_time": t + 10, "flight_id": next_aircraft.flight_id}
+                next_aircraft.goal_node = gate  # Assign the freed gate to the waiting aircraft
+                print(f"Time {t}: Waiting aircraft {next_aircraft.flight_id} is now assigned to gate {gate}.")
+
     if abs(t - round(t)) < 1e-9 and (round(t) % task_interval == 0):
         task_counter += 1
-        new_task_id = task_counter
-        task = generate_flight_task(new_task_id)
-        if task.type == "A":
-            arrival_depot.add_task(task)
-            print(f"Time {t}: New arrival task {task.flight_id} added to arrival depot (from {task.start_node} to {task.goal_node})")
-        else:
-            departure_depot.add_task(task)
-            print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
+        task_id = task_counter
+        task = generate_flight_task(task_id, t)
+        
+        if task:
+            if task.goal_node == "waiting":
+                if "waiting_aircraft" not in globals():
+                    waiting_aircraft = []
+                waiting_aircraft.append(task)  # Add to the waiting queue
+                print(f"Time {t}: Aircraft {task.flight_id} is waiting for a free gate.")
+            elif task.type == "A":
+                arrival_depot.add_task(task)
+                print(f"Time {t}: New arrival task {task.flight_id} added to arrival depot (from {task.start_node} to {task.goal_node})")
+            else:
+                departure_depot.add_task(task)
+                print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
 
     
     # print status' of the depots every 10 time steps 
