@@ -313,21 +313,34 @@ def map_running(map_properties, current_states, t):  # function to update the ma
                     current_states[vehicle]["xy_pos"][1], 
                     min_x, max_y, x_range, y_range, 0, 25)
 
-    collision=False
+    # collision=False
+    # for tug1 in current_states:
+    #     for tug2 in current_states:
+    #         if tug1 != tug2 and current_states[tug1]["xy_pos"] == current_states[tug2]["xy_pos"]:
+    #             collision=True
+    #             print("COLLISION - between", current_states[tug1]["tug_id"], "and", current_states[tug2]["tug_id"], "at location", current_states[tug1]["xy_pos"], "time", time)
+    #             plot_text(scr, "COLLISION", purple, 16, reso, current_states[tug1]["xy_pos"][0], current_states[tug1]["xy_pos"][1]+0.1, min_x, max_y, x_range, y_range, 0,
+    #                   25)
+    collision = False
     for tug1 in current_states:
         for tug2 in current_states:
             if tug1 != tug2 and current_states[tug1]["xy_pos"] == current_states[tug2]["xy_pos"]:
-                collision=True
-                print("COLLISION - between", current_states[tug1]["tug_id"], "and", current_states[tug2]["tug_id"], "at location", current_states[tug1]["xy_pos"], "time", time)
-                plot_text(scr, "COLLISION", purple, 16, reso, current_states[tug1]["xy_pos"][0], current_states[tug1]["xy_pos"][1]+0.1, min_x, max_y, x_range, y_range, 0,
-                      25)
+                if current_states[tug1]["xy_pos"] not in [(4.0, 8.0), (7.0, 7.0)]:  # Skip collisions at the depot and at (7.0, 7.0)
+                    collision = True
+                    print("COLLISION - between", current_states[tug1]["tug_id"], "and", current_states[tug2]["tug_id"],
+                        "at location", current_states[tug1]["xy_pos"], "time", time)
+                    plot_text(scr, "COLLISION", purple, 16, reso,
+                            current_states[tug1]["xy_pos"][0],
+                            current_states[tug1]["xy_pos"][1] + 0.1,
+                            min_x, max_y, x_range, y_range, 0, 25)
+
    
     pg.display.flip()  # Update the full display Surface to the screen
     pg.event.pump()  # internally process pygame event handlers
     keys = pg.key.get_pressed()  # get the state of all keyboard buttons
     
-    if collision:
-        timer.sleep(0.4)
+    # if collision:
+    #     timer.sleep(0.4)
     
     if keys[pg.K_ESCAPE]:  # if the escape key is being pressed
         escape_pressed = True  # stop running

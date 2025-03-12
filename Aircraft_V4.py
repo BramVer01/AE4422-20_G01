@@ -187,7 +187,17 @@ class Tug(object):
                 self.wait = False
                 print("Path (prioritized) for tug", self.id, ":", path)
             else:
-                raise Exception("No solution found for tug", self.id)
+                success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
+
+                if success:
+                    self.path_to_goal = path[1:]
+                    next_node_id = self.path_to_goal[0][0]
+                    self.from_to = [path[0][0], next_node_id]
+                    self.wait = False
+                    print("Path (prioritized) for tug", self.id, ":", path)
+                
+                else:
+                    raise Exception("No solution found for tug", self.id)
             
             # Optionally, verify that the planning start time matches.
             if path[0][1] != t:
