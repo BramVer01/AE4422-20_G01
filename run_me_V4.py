@@ -387,79 +387,86 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
     # Return the KPI data for further analysis
     return {"collisions": total_collisions, "tasks_completed": total_tasks_completed, "avg_time": avg_time, "avg_distance": avg_distance}
 
+run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
 
-'''# TUGS OMHOOG'''
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
 
-    visualization = False
-    simulation_time = 50
-    visualization_speed = 0.00001  # Speed up simulation
-    task_interval = 3             # Fixed task interval for this experiment
-    tug_counts = list(range(1, 9))  # From 1 to 8 tugs
+#     visualization = False
+#     simulation_time = 50
+#     visualization_speed = 0.00001  # Speed up simulation
+#     task_interval = 3             # Fixed task interval for this experiment
+#     tug_counts = list(range(1, 9))  # From 1 to 8 tugs
 
-    # Containers for averaged KPI values
-    collisions_data = []      # average collisions for each tug_count
-    avg_time_data = []        # average task completion time for each tug_count
-    tasks_completed_data = [] # average total tasks completed for each tug_count
+#     # Containers for averaged KPI values
+#     collisions_data = []      # average collisions for each tug_count
+#     avg_time_data = []        # average task completion time for each tug_count
+#     tasks_completed_data = [] # average total tasks completed for each tug_count
 
-    # Containers for individual run data (for scatter plotting)
-    collisions_individual = {}  # mapping tug_count -> list of collisions (one per run)
-    time_individual = {}        # mapping tug_count -> list of avg task times (one per run)
-    tasks_individual = {}       # mapping tug_count -> list of tasks completed (one per run)
+#     # Containers for individual run data (for scatter plotting)
+#     collisions_individual = {}  # mapping tug_count -> list of collisions (one per run)
+#     time_individual = {}        # mapping tug_count -> list of avg task times (one per run)
+#     tasks_individual = {}       # mapping tug_count -> list of tasks completed (one per run)
 
-    # For each tug_count value, run the simulation 5 times and average the KPIs.
-    for tug_count in tug_counts:
-        collisions_runs = []
-        time_runs = []
-        tasks_runs = []
-        for run in range(5):
-            kpi = run_simulation(visualization_speed, task_interval, tug_count, simulation_time)
-            collisions_runs.append(kpi["collisions"])
-            time_runs.append(kpi["avg_time"])
-            tasks_runs.append(kpi["tasks_completed"])
-        avg_collisions = sum(collisions_runs) / len(collisions_runs)
-        avg_time = sum(time_runs) / len(time_runs)
-        avg_tasks = sum(tasks_runs) / len(tasks_runs)
-        collisions_data.append(avg_collisions)
-        avg_time_data.append(avg_time)
-        tasks_completed_data.append(avg_tasks)
-        collisions_individual[tug_count] = collisions_runs
-        time_individual[tug_count] = time_runs
-        tasks_individual[tug_count] = tasks_runs
-        print(f"Tugs: {tug_count} -> Avg Collisions: {avg_collisions}, Avg Time: {avg_time}, Total Tasks: {avg_tasks}")
+#     # For each tug_count value, run the simulation 5 times and average the KPIs.
+#     for tug_count in tug_counts:
+#         collisions_runs = []
+#         time_runs = []
+#         tasks_runs = []
+#         for run in range(15):
+#             kpi = run_simulation(visualization_speed, task_interval, tug_count, simulation_time)
+#             collisions_runs.append(kpi["collisions"])
+#             time_runs.append(kpi["avg_time"])
+#             tasks_runs.append(kpi["tasks_completed"])
+#         avg_collisions = sum(collisions_runs) / len(collisions_runs)
+#         avg_time = sum(time_runs) / len(time_runs)
+#         avg_tasks = sum(tasks_runs) / len(tasks_runs)
+#         collisions_data.append(avg_collisions)
+#         avg_time_data.append(avg_time)
+#         tasks_completed_data.append(avg_tasks)
+#         collisions_individual[tug_count] = collisions_runs
+#         time_individual[tug_count] = time_runs
+#         tasks_individual[tug_count] = tasks_runs
+#         print(f"Tugs: {tug_count} -> Avg Collisions: {avg_collisions}, Avg Time: {avg_time}, Total Tasks: {avg_tasks}")
 
-    # Plot Average Collisions and Average Task Completion Time in the same plot.
-    plt.figure(figsize=(8, 6))
-    # Plot the average curves
-    plt.plot(tug_counts, collisions_data, marker='o', color='blue', label='Avg Collisions')
-    plt.plot(tug_counts, avg_time_data, marker='o', color='red', label='Avg Task Completion Time')
-    # Plot individual run datapoints as scatter points
-    for tc in tug_counts:
-        runs_collisions = collisions_individual[tc]
-        plt.scatter([tc] * len(runs_collisions), runs_collisions, color='blue', alpha=0.6)
-        runs_time = time_individual[tc]
-        plt.scatter([tc] * len(runs_time), runs_time, color='red', alpha=0.6)
-    plt.xlabel("Number of Tugs")
-    plt.ylabel("KPI Value")
-    plt.title("Avg Collisions & Task Completion Time vs Number of Tugs")
-    plt.legend()
-    plt.show()
+#     # Plot everything in one graph using twin y-axes.
+#     fig, ax1 = plt.subplots(figsize=(10, 6))
+#     ax2 = ax1.twinx()
 
-    # Plot Total Tasks Completed in a separate figure.
-    plt.figure(figsize=(8, 6))
-    plt.plot(tug_counts, tasks_completed_data, marker='o', color='green', label='Total Tasks Completed')
-    for tc in tug_counts:
-        runs_tasks = tasks_individual[tc]
-        plt.scatter([tc] * len(runs_tasks), runs_tasks, color='green', alpha=0.6)
-    plt.xlabel("Number of Tugs")
-    plt.ylabel("Total Tasks Completed")
-    plt.title("Total Tasks Completed vs Number of Tugs")
-    plt.legend()
-    plt.show()
+#     # Plot average collisions and average task completion time on the left y-axis.
+#     ax1.plot(tug_counts, collisions_data, marker='o', color='blue', label='Avg Collisions')
+#     for tc in tug_counts:
+#         runs_collisions = collisions_individual[tc]
+#         ax1.scatter([tc] * len(runs_collisions), runs_collisions, color='blue', alpha=0.6)
+        
+#     ax1.plot(tug_counts, avg_time_data, marker='o', color='red', label='Avg Task Completion Time')
+#     for tc in tug_counts:
+#         runs_time = time_individual[tc]
+#         ax1.scatter([tc] * len(runs_time), runs_time, color='red', alpha=0.6)
+
+#     ax1.set_xlabel("Number of Tugs")
+#     ax1.set_ylabel("Avg Collisions / Task Completion Time", color='black')
+#     ax1.tick_params(axis='y', labelcolor='black')
+
+#     # Plot total tasks completed on the right y-axis.
+#     ax2.plot(tug_counts, tasks_completed_data, marker='o', color='green', label='Total Tasks Completed')
+#     for tc in tug_counts:
+#         runs_tasks = tasks_individual[tc]
+#         ax2.scatter([tc] * len(runs_tasks), runs_tasks, color='green', alpha=0.6)
+#     ax2.set_ylabel("Total Tasks Completed", color='green')
+#     ax2.tick_params(axis='y', labelcolor='green')
+
+#     plt.title("KPIs vs Number of Tugs")
+#     # Combine legends from both axes.
+#     lines1, labels1 = ax1.get_legend_handles_labels()
+#     lines2, labels2 = ax2.get_legend_handles_labels()
+#     ax1.legend(lines1 + lines2, labels1 + labels2, loc='best')
+
+#     plt.tight_layout()
+#     plt.show()
 
 
-'''TASK INVERVAL OMHOOG'''
+# '''TASK INVERVAL OMHOOG'''
 # if __name__ == "__main__":
 #     import matplotlib.pyplot as plt
 
@@ -484,7 +491,7 @@ if __name__ == "__main__":
 #         collisions_runs = []
 #         time_runs = []
 #         tasks_runs = []
-#         for run in range(3):
+#         for run in range(15):
 #             kpi = run_simulation(visualization_speed, ti, total_tugs, simulation_time)
 #             collisions_runs.append(kpi["collisions"])
 #             time_runs.append(kpi["avg_time"])
