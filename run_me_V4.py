@@ -427,7 +427,8 @@ if __name__ == "__main__":
     simulation_time = 50
     visualization_speed = 0.00001  # Speed up simulation
     task_interval = 3             # Fixed task interval for this experiment
-    tug_counts = list(range(1, 9))  # From 1 to 8 tugs
+    tug_counts = list(range(1, 14))  # From 1 to 8 tugs
+    num_executions = 15
 
     # Containers for averaged KPI values
     collisions_data = []         # average collisions for each tug_count
@@ -447,7 +448,7 @@ if __name__ == "__main__":
         exec_time_runs = []
         total_time_runs = []
         tasks_runs = []
-        for run in range(15):
+        for run in range(num_executions):
             kpi = run_simulation(visualization_speed, task_interval, tug_count, simulation_time)
             collisions_runs.append(kpi["collisions"])
             exec_time_runs.append(kpi["avg_execution_time"])
