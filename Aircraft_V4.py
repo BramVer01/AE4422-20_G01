@@ -214,3 +214,25 @@ class Tug(object):
         self.status = "moving_to_task"
         self.wait = True
         print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
+
+    def set_init_tug_params(self, tug_id, a_d, start_node, nodes_dict):
+                #Fixed parameters
+        self.speed = 1         #how much tug moves per unit of t
+        self.id = tug_id       #tug_id
+        self.type = a_d           #arrival or departure (A/D), also defines to which depot it will return initially
+        self.start = start_node   #start_node_id
+        self.goal = None     #goal_node_id
+        self.coupled = start_node #coupled flight /depot 
+        # Add the new fields
+        self.current_task = None
+        self.final_goal = None
+        self.wait = None
+        
+        #Route related
+        self.status = 'idle' # idle, moving_to_task, executing, to_depot
+        self.path_to_goal = [] #planned path left from current location
+        self.from_to = [0,0]
+
+        #State related
+        self.heading = 0
+        self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position

@@ -290,8 +290,9 @@ def run_simulation(visualization_speed, task_interval, total_tugs):
             # print statuses of all tugs every 10 time steps
             for tug in tug_list:
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
-                if hasattr(tug, 'path'):
-                    print(f"  Current path: {tug.path}")
+                if hasattr(tug, 'path_to_goal'):
+                    print(f"  Current path: {tug.path_to_goal}")
+                    print(f"  Current goal: {tug.goal}")
                 else:
                     print("  Current path: None")
 
@@ -349,14 +350,16 @@ def run_simulation(visualization_speed, task_interval, total_tugs):
 
         # Check for idle tugs that have reached the depot and update depot queues
         for tug in tug_list:
-            if tug.status == "idle":
+            if tug.status == "idle": # this means that the tug is back in the depod 
                 if tug.type == "D" and tug.coupled == departure_depot.position:
                     if tug not in departure_depot.tugs.queue:
                         departure_depot.tugs.put(tug)
+                        tug.set_init_tug_params(tug_id, "D", departure_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the departure depot.")
                 elif tug.type == "A" and tug.coupled == arrival_depot.position:
                     if tug not in arrival_depot.tugs.queue:
                         arrival_depot.tugs.put(tug)
+                        tug.set_init_tug_params(tug_id, "A", arrival_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the arrival depot.")                           
                                
         t = t + dt
