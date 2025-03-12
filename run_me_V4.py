@@ -354,12 +354,12 @@ def run_simulation(visualization_speed, task_interval, total_tugs):
                 if tug.type == "D" and tug.coupled == departure_depot.position:
                     if tug not in departure_depot.tugs.queue:
                         departure_depot.tugs.put(tug)
-                        tug.set_init_tug_params(tug_id, "D", departure_depot.position, nodes_dict)
+                        tug.set_init_tug_params(tug.id, "D", departure_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the departure depot.")
                 elif tug.type == "A" and tug.coupled == arrival_depot.position:
                     if tug not in arrival_depot.tugs.queue:
                         arrival_depot.tugs.put(tug)
-                        tug.set_init_tug_params(tug_id, "A", arrival_depot.position, nodes_dict)
+                        tug.set_init_tug_params(tug.id, "A", arrival_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the arrival depot.")                           
                                
         t = t + dt
