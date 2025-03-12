@@ -195,7 +195,7 @@ class Tug(object):
                     next_node_id = self.path_to_goal[0][0]
                     self.from_to = [path[0][0], next_node_id]
                     self.wait = False
-                    print("Path (prioritized) for tug", self.id, ":", path)
+                    # print("Path (prioritized) for tug", self.id, ":", path)
                 
                 else:
                     raise Exception("No solution found for tug", self.id)
