@@ -17,6 +17,8 @@ from prioritized import run_prioritized_planner
 from cbs import run_CBS
 from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
+import matplotlib.pyplot as plt
+
 
 #%% SET SIMULATION PARAMETERS
 #Input file names (used in import_layout) -> Do not change those unless you want to specify a new layout.
@@ -145,15 +147,14 @@ def create_graph(nodes_dict, edges_dict, plot_graph = True):
 #%% RUN SIMULATION
 
 def run_simulation(visualization_speed, task_interval, total_tugs, simulation_time):
-
     # --- KPI Global Variables ---
     total_collisions = 0
-    task_completion_times = []  # list of task durations
-    task_distances = []         # list of distances traveled for each task
-    total_tasks_completed = 0   # total number of tasks completed
-    task_start_times = {}       # key: tug.id, value: simulation time when task execution started
-    task_start_positions = {}   # key: tug.id, value: tug position when task execution started
-    prev_status = {}            # key: tug.id, value: previous status
+    task_completion_times = []   # list of task durations (in simulation time units)
+    task_distances = []          # list of distances traveled (number of node transitions)
+    total_tasks_completed = 0    # total number of tasks completed
+    task_start_times = {}        # key: tug.id, value: simulation time when task execution started
+    task_nodes = {}              # key: tug.id, value: list of nodes traversed during execution
+    prev_status = {}             # key: tug.id, value: previous status
     # ----------------------------------------------------------
 
     nodes_dict, edges_dict, start_and_goal_locations = import_layout(nodes_file, edges_file)
@@ -272,25 +273,30 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                 else:
                     print("  Current path: None")
 
-        # --- Collision Detection KPI ---
+        # --- Collision Detection KPI (always computed) ---
+        current_states = {}
+        for tug in tug_list:
+            if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
+                current_states[tug.id] = {
+                    "tug_id": tug.id,
+                    "xy_pos": tug.position,
+                    "heading": tug.heading,
+                    "has_flight": has_flight,
+                    "status": tug.status
+                }
         if visualization:
-            current_states = {}
-            for tug in tug_list:
-                if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
-                    current_states[tug.id] = {"tug_id": tug.id,
-                                              "xy_pos": tug.position,
-                                              "heading": tug.heading,
-                                              "has_flight": has_flight,
-                                              "status": tug.status}
-            for id1 in current_states:
-                for id2 in current_states:
-                    if id1 < id2:
-                        if current_states[id1]["xy_pos"] == current_states[id2]["xy_pos"]:
-                            total_collisions += 1
-                            print(f"Collision detected between Tug {id1} and Tug {id2} at time {t}")
             escape_pressed = map_running(map_properties, current_states, t)
             timer.sleep(visualization_speed)
+        
+        for id1 in current_states:
+            for id2 in current_states:
+                if id1 < id2:
+                    if current_states[id1]["xy_pos"] == current_states[id2]["xy_pos"]:
+                        total_collisions += 1
+                        print(f"Collision detected between Tug {id1} and Tug {id2} at time {t}")
+
+
 
         arrival_depot.match_task(t)
         departure_depot.match_task(t)
@@ -318,27 +324,34 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         for tug in tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 tug.move(dt, t)
-
-        # KPI: Detect Task Completion & Record Metrics
+        
+        # --- KPI: Detect Task Completion & Record Metrics ---
+        # For distance, we count the nodes traversed during task execution.
         for tug in tug_list:
-            # Detect transition from executing to to_depot (indicating task completion)
+            # Use tug.current_node if available; otherwise, assume tug.start represents the current node.
+            current_node = getattr(tug, 'current_node', tug.start)
+            if tug.status == "executing":
+                if tug.id not in task_nodes:
+                    task_nodes[tug.id] = [current_node]
+                else:
+                    if task_nodes[tug.id][-1] != current_node:
+                        task_nodes[tug.id].append(current_node)
+            # Detect transition from "executing" to "to_depot" (i.e. task completion)
             if prev_status[tug.id] == "executing" and tug.status == "to_depot":
-                if tug.id in task_start_times and tug.id in task_start_positions:
+                if tug.id in task_start_times and tug.id in task_nodes:
                     duration = t - task_start_times[tug.id]
                     task_completion_times.append(duration)
-                    traveled_distance = distance(task_start_positions[tug.id], tug.position)
+                    traveled_distance = len(task_nodes[tug.id]) - 1
                     task_distances.append(traveled_distance)
                     total_tasks_completed += 1
-                    print(f"Tug {tug.id} completed its task in {duration} sec, distance: {traveled_distance}")
+                    print(f"Tug {tug.id} completed its task in {duration} sec, nodes traversed: {traveled_distance}")
                     del task_start_times[tug.id]
-                    del task_start_positions[tug.id]
-            # When a tug starts executing a task, record its start time and starting position.
+                    del task_nodes[tug.id]
             if tug.status == "executing" and tug.id not in task_start_times:
                 task_start_times[tug.id] = t
-                task_start_positions[tug.id] = tug.position
             prev_status[tug.id] = tug.status
 
-        # Update Depot Queues for Idle Tugs
+        # --- Update Depot Queues for Idle Tugs ---
         for tug in tug_list:
             if tug.status == "idle":
                 if tug.type == "D" and tug.coupled == departure_depot.position:
@@ -353,27 +366,156 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                         print(f"Tug {tug.id} has returned to the arrival depot.")
         t = t + dt
 
+    # --- Compute Average KPI Values ---
+    if task_completion_times:
+        avg_time = sum(task_completion_times) / len(task_completion_times)
+    else:
+        avg_time = 0
+    if task_distances:
+        avg_distance = sum(task_distances) / len(task_distances)
+    else:
+        avg_distance = 0
+
     # --- Print KPI Summary at End of Simulation ---
     print("\n----- KPI SUMMARY -----")
     print("Total collisions detected:", total_collisions)
     print("Total tasks completed:", total_tasks_completed)
-    if task_completion_times:
-        avg_time = sum(task_completion_times) / len(task_completion_times)
-        print("Average task completion time:", avg_time)
-    else:
-        print("No task completions recorded.")
-    if task_distances:
-        avg_distance = sum(task_distances) / len(task_distances)
-        print("Average task distance:", avg_distance)
-    else:
-        print("No task distances recorded.")
+    print("Average task completion time:", avg_time)
+    print("Average task distance (in nodes traversed):", avg_distance)
     print("-----------------------")
-    
+
+    # Return the KPI data for further analysis
+    return {"collisions": total_collisions, "tasks_completed": total_tasks_completed, "avg_time": avg_time, "avg_distance": avg_distance}
+
+
+'''# TUGS OMHOOG'''
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
 
+    visualization = False
     simulation_time = 50
-    visualization_speed = 0.01 #set at 0.1 as default
-    task_interval = 4    # New: generate a task every 5 seconds
-    total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+    visualization_speed = 0.00001  # Speed up simulation
+    task_interval = 3             # Fixed task interval for this experiment
+    tug_counts = list(range(1, 9))  # From 1 to 8 tugs
 
-    run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
+    # Containers for averaged KPI values
+    collisions_data = []      # average collisions for each tug_count
+    avg_time_data = []        # average task completion time for each tug_count
+    tasks_completed_data = [] # average total tasks completed for each tug_count
+
+    # Containers for individual run data (for scatter plotting)
+    collisions_individual = {}  # mapping tug_count -> list of collisions (one per run)
+    time_individual = {}        # mapping tug_count -> list of avg task times (one per run)
+    tasks_individual = {}       # mapping tug_count -> list of tasks completed (one per run)
+
+    # For each tug_count value, run the simulation 5 times and average the KPIs.
+    for tug_count in tug_counts:
+        collisions_runs = []
+        time_runs = []
+        tasks_runs = []
+        for run in range(5):
+            kpi = run_simulation(visualization_speed, task_interval, tug_count, simulation_time)
+            collisions_runs.append(kpi["collisions"])
+            time_runs.append(kpi["avg_time"])
+            tasks_runs.append(kpi["tasks_completed"])
+        avg_collisions = sum(collisions_runs) / len(collisions_runs)
+        avg_time = sum(time_runs) / len(time_runs)
+        avg_tasks = sum(tasks_runs) / len(tasks_runs)
+        collisions_data.append(avg_collisions)
+        avg_time_data.append(avg_time)
+        tasks_completed_data.append(avg_tasks)
+        collisions_individual[tug_count] = collisions_runs
+        time_individual[tug_count] = time_runs
+        tasks_individual[tug_count] = tasks_runs
+        print(f"Tugs: {tug_count} -> Avg Collisions: {avg_collisions}, Avg Time: {avg_time}, Total Tasks: {avg_tasks}")
+
+    # Plot Average Collisions and Average Task Completion Time in the same plot.
+    plt.figure(figsize=(8, 6))
+    # Plot the average curves
+    plt.plot(tug_counts, collisions_data, marker='o', color='blue', label='Avg Collisions')
+    plt.plot(tug_counts, avg_time_data, marker='o', color='red', label='Avg Task Completion Time')
+    # Plot individual run datapoints as scatter points
+    for tc in tug_counts:
+        runs_collisions = collisions_individual[tc]
+        plt.scatter([tc] * len(runs_collisions), runs_collisions, color='blue', alpha=0.6)
+        runs_time = time_individual[tc]
+        plt.scatter([tc] * len(runs_time), runs_time, color='red', alpha=0.6)
+    plt.xlabel("Number of Tugs")
+    plt.ylabel("KPI Value")
+    plt.title("Avg Collisions & Task Completion Time vs Number of Tugs")
+    plt.legend()
+    plt.show()
+
+    # Plot Total Tasks Completed in a separate figure.
+    plt.figure(figsize=(8, 6))
+    plt.plot(tug_counts, tasks_completed_data, marker='o', color='green', label='Total Tasks Completed')
+    for tc in tug_counts:
+        runs_tasks = tasks_individual[tc]
+        plt.scatter([tc] * len(runs_tasks), runs_tasks, color='green', alpha=0.6)
+    plt.xlabel("Number of Tugs")
+    plt.ylabel("Total Tasks Completed")
+    plt.title("Total Tasks Completed vs Number of Tugs")
+    plt.legend()
+    plt.show()
+
+
+'''TASK INVERVAL OMHOOG'''
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+
+#     visualization = False
+#     simulation_time = 100
+#     visualization_speed = 0.00001  # Speed up simulation
+#     total_tugs = 4
+
+#     # Vary task_interval from 10 down to 1 (here using step 2; adjust if desired)
+#     task_intervals = list(range(10, 0, -2))
+#     collisions_data = []   # average collisions per task_interval
+#     avg_time_data = []     # average task completion time per task_interval
+#     tasks_completed_data = []  # average total tasks completed per task_interval
+
+#     # For scatter plots, store individual run data
+#     collisions_all = []  # list of lists: collisions for each run at a given task_interval
+#     times_all = []       # list of lists: task times for each run at a given task_interval
+#     tasks_all = []       # list of lists: tasks completed for each run at a given task_interval
+
+#     # For each task_interval, run the simulation 5 times and average the KPIs.
+#     for ti in task_intervals:
+#         collisions_runs = []
+#         time_runs = []
+#         tasks_runs = []
+#         for run in range(3):
+#             kpi = run_simulation(visualization_speed, ti, total_tugs, simulation_time)
+#             collisions_runs.append(kpi["collisions"])
+#             time_runs.append(kpi["avg_time"])
+#             tasks_runs.append(kpi["tasks_completed"])
+#         avg_collisions = sum(collisions_runs) / len(collisions_runs)
+#         avg_time = sum(time_runs) / len(time_runs)
+#         avg_tasks = sum(tasks_runs) / len(tasks_runs)
+
+#         collisions_data.append(avg_collisions)
+#         avg_time_data.append(avg_time)
+#         tasks_completed_data.append(avg_tasks)
+
+#         collisions_all.append(collisions_runs)
+#         times_all.append(time_runs)
+#         tasks_all.append(tasks_runs)
+
+#         print(f"Task Interval: {ti} -> Avg Collisions: {avg_collisions}, Avg Time: {avg_time}, Avg Tasks Completed: {avg_tasks}")
+
+#     # Plot all three KPIs in the same figure
+#     plt.figure()
+#     # Plot average curves
+#     plt.plot(task_intervals, collisions_data, marker='o', color='blue', label='Avg Collisions')
+#     plt.plot(task_intervals, avg_time_data, marker='o', color='red', label='Avg Task Completion Time')
+#     plt.plot(task_intervals, tasks_completed_data, marker='o', color='green', label='Avg Tasks Completed')
+#     # Plot individual datapoints
+#     for i, ti in enumerate(task_intervals):
+#         plt.scatter([ti] * len(collisions_all[i]), collisions_all[i], color='blue', alpha=0.6)
+#         plt.scatter([ti] * len(times_all[i]), times_all[i], color='red', alpha=0.6)
+#         plt.scatter([ti] * len(tasks_all[i]), tasks_all[i], color='green', alpha=0.6)
+#     plt.xlabel("Task Interval")
+#     plt.ylabel("KPI Value")
+#     plt.title("KPIs vs Task Interval")
+#     plt.legend()
+#     plt.show()
