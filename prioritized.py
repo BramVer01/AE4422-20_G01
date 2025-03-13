@@ -8,10 +8,10 @@ def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t,
         if j.id != tug.id:
             previous_node = None
             for node in tug.path_to_goal:
-                con = {'positive': False, 'agent': j.id, 'loc': [node], 'timestep': node[1]}
+                con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1], 'constrainting_tug': tug.id}
                 constraints.append(con)
                 if previous_node is not None:
-                    con = {'positive': False, 'agent': j.id, 'loc': [node, previous_node], 'timestep': node[1]}
+                    con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constrainting_tug': tug.id}
                 constraints.append(con)
                 previous_node = node
                 # if node == ac.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!

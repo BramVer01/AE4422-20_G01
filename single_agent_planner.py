@@ -204,16 +204,16 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     for constraint in constraints_at_time:
         if constraint['positive']:
             # For a positive constraint, the move is only allowed if next_loc matches.
-            if constraint['loc'][0][0] != next_loc:
+            if constraint['loc'][0] != next_loc:
                 return True
         else:
             # For a negative constraint, if it's a vertex constraint check for equality.
             if len(constraint['loc']) == 1:
-                if constraint['loc'][0][0] == next_loc:
+                if constraint['loc'][0] == next_loc:
                     return True
             else:
                 # For an edge constraint, check if the move matches the edge.
-                if [constraint['loc'][0][0], constraint['loc'][1][0]] == [curr_loc, next_loc]:
+                if [constraint['loc'][0], constraint['loc'][1]] == [curr_loc, next_loc]:
                     return True
     return False
 
