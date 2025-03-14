@@ -29,6 +29,7 @@ class Tug(object):
         self.current_task = None
         self.final_goal = None
         self.wait = None
+        self.constraining_tug = None
         
         #Route related
         self.status = 'idle' # idle, moving_to_task, executing, to_depot
@@ -177,32 +178,38 @@ class Tug(object):
             start_node = self.start
             goal_node = self.goal
             # Call the prioritized A* function with the extra parameters.
-            success, path = simple_single_agent_astar_prioritized(
+            success, path_agent = simple_single_agent_astar_prioritized(
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
             )
             if success:
-                self.path_to_goal = path[1:]
+                self.path_to_goal = path_agent[1:]
                 next_node_id = self.path_to_goal[0][0]
-                self.from_to = [path[0][0], next_node_id]
+                self.from_to = [path_agent[0][0], next_node_id]
                 self.wait = False
-                print("Path (prioritized) for tug", self.id, ":", path)
+                print("Path (prioritized) for tug", self.id, ":", path_agent)
             else:
-                # this is new to prevent the simulation from stopping when no path is found using prio A*
-                success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
+                print("No solution found for tug", self.id, "start to switch priority")
+                self.wait = True
+                self.constraining_tug = path_agent
+                path_agent.path_to_goal = []
+                path_agent.wait = True
+                path_agent.start = path_agent.from_to[0]
+                # # this is new to prevent the simulation from stopping when no path is found using prio A*
+                # success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
 
-                if success:
-                    self.path_to_goal = path[1:]
-                    next_node_id = self.path_to_goal[0][0]
-                    self.from_to = [path[0][0], next_node_id]
-                    self.wait = False
-                    # print("Path (prioritized) for tug", self.id, ":", path)
+                # if success:
+                #     self.path_to_goal = path[1:]
+                #     next_node_id = self.path_to_goal[0][0]
+                #     self.from_to = [path[0][0], next_node_id]
+                #     self.wait = False
+                #     # print("Path (prioritized) for tug", self.id, ":", path)
                 
-                else:
-                    raise Exception("No solution found for tug", self.id)
+                # else:
+                #     raise Exception("No solution found for tug", self.id)
             
             # Optionally, verify that the planning start time matches.
-            if path[0][1] != t:
-                raise Exception("Timing error in path planning for tug", self.id)
+            # if path_agent[0][1] != t:
+            #     raise Exception("Timing error in path planning for tug", self.id)
 
     def assign_task(self, task):
         """Assign a flight task to this tug."""

@@ -159,26 +159,26 @@ def build_constraint_table(constraints, agent, delta_t):
     for constraint in positive:
         t = constraint['timestep']
         if len(constraint['loc']) == 1:  # vertex constraint
-            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': True})
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': True, 'constraining_tug': constraint['constraining_tug']})
         else:  # edge constraint: split into two parts using delta_t instead of 1.
             t_from = t - delta_t
             t_to = t
-            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': True})
-            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': True})
+            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': True, 'constraining_tug': constraint['constraining_tug']})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': True, 'constraining_tug': constraint['constraining_tug']})
 
     # Process negative constraints.
     for constraint in negative:
         t = constraint['timestep']
         if len(constraint['loc']) == 1:  # vertex constraint
-            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False})
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False, 'constraining_tug': constraint['constraining_tug']})
         elif constraint.get('positive', False):  # if for some reason a positive edge constraint is here for other agents
             t_from = t - delta_t
             t_to = t
-            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': False})
-            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': False})
-            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1], constraint['loc'][0]], 'positive': False})
+            constraint_table.setdefault(t_from, []).append({'loc': [constraint['loc'][0]], 'positive': False, 'constraining_tug': constraint['constraining_tug']})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1]], 'positive': False, 'constraining_tug': constraint['constraining_tug']})
+            constraint_table.setdefault(t_to, []).append({'loc': [constraint['loc'][1], constraint['loc'][0]], 'positive': False, 'constraining_tug': constraint['constraining_tug']})
         else:  # negative edge constraint
-            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False})
+            constraint_table.setdefault(t, []).append({'loc': constraint['loc'], 'positive': False, 'constraining_tug': constraint['constraining_tug']})
 
     return constraint_table
 
@@ -205,17 +205,17 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
         if constraint['positive']:
             # For a positive constraint, the move is only allowed if next_loc matches.
             if constraint['loc'][0] != next_loc:
-                return True
+                return True, constraint['constraining_tug']
         else:
             # For a negative constraint, if it's a vertex constraint check for equality.
             if len(constraint['loc']) == 1:
                 if constraint['loc'][0] == next_loc:
-                    return True
+                    return True, constraint['constraining_tug']
             else:
                 # For an edge constraint, check if the move matches the edge.
                 if [constraint['loc'][0], constraint['loc'][1]] == [curr_loc, next_loc]:
-                    return True
-    return False
+                    return True, constraint['constraining_tug']
+    return False, None
 
 def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heuristics, time_start, delta_t, agent, constraints):
     # def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
@@ -254,9 +254,11 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
                 found = True
                 for t in sorted(constraint_table.keys()):
                     if t >= curr['timestep'] + delta_t:
-                        if is_constrained(goal_node, goal_node, t, constraint_table):
+                        constrained, constraining_agent = is_constrained(goal_node, goal_node, t, constraint_table)
+                        if constrained:
                             found = False
                             earliest_goal_timestep = t + delta_t
+                            failed_agent = constraining_agent
                             break
                 if found:
                     return True, get_path(curr)
@@ -270,7 +272,9 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
         for neighbor in neighbors:
             new_time = curr['timestep'] + delta_t
             # If using constraints, skip this neighbor if a constraint is active.
-            if constraint_table is not None and is_constrained(curr['loc'], neighbor, new_time, constraint_table):
+            constrained, constraining_agent = is_constrained(curr['loc'], neighbor, new_time, constraint_table)
+            if constrained:
+                failed_agent = constraining_agent
                 continue
             child = {'loc': neighbor,
                     'g_val': curr['g_val'] + delta_t,  # update cost as needed
@@ -288,4 +292,4 @@ def simple_single_agent_astar_prioritized(nodes_dict, from_node, goal_node, heur
                 push_node(open_list, child)
 
     print("No path found, visited", len(closed_list), "nodes")
-    return False, []
+    return False, failed_agent

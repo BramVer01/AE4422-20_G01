@@ -32,7 +32,7 @@ planner = "Prioritized" #choose which planner to use (currently only Independent
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
-visualization_speed = 0.02 #set at 0.1 as default
+visualization_speed = 0.1 #set at 0.1 as default
 
 task_interval = 5    # New: generate a task every 5 seconds
 total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
