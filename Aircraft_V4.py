@@ -253,8 +253,11 @@ class Tug(object):
         else:
             print('no path can be found')
             path_length = float(np.inf)  # set path_length to infinity when no path is found
+        
+        delay = (task.spawn_time - t ) / 100000000
 
-        delay = task.spawn_time - t
+        print(f'path_length = {path_length}, delay = {delay}')
+
         return alpha * (delay)**gamma + beta * path_length
 
         
