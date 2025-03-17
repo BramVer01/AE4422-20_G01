@@ -244,17 +244,17 @@ class Tug(object):
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position
 
-    def bidders_value(self, task, nodes_dict, heuristics, time_start, t, gamma=1, alpha=1, beta=1):
+    def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
         '''returns the max price to pay at the auction (tug allocation)'''
 
-        success, path = simple_single_agent_astar(nodes_dict, task.start_node, task.goal_node, heuristics, time_start)
+        success, path = simple_single_agent_astar(nodes_dict, task.start_node, task.goal_node, heuristics, t)
         if success:
             path_length = len(path)  # number of nodes in the path
         else:
             print('no path can be found')
             path_length = float(np.inf)  # set path_length to infinity when no path is found
 
-        delay = t - task.spawn_time
+        delay = task.spawn_time - t
         return alpha * (delay)**gamma + beta * path_length
 
         
