@@ -205,8 +205,8 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             departing_flight_id = gate_status[start_node]["flight_id"]
             del gate_status[start_node]
             print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
-            return FlightTask(departing_flight_id, "D", start_node, goal_node, time.time())
-        return FlightTask(flight_id, a_d, start_node, goal_node, time.time())
+            return FlightTask(departing_flight_id, "D", start_node, goal_node, t)
+        return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
     if visualization:
         map_properties = map_initialization(nodes_dict, edges_dict)
@@ -228,7 +228,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
                 print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure.")
-                task = FlightTask(info["flight_id"], "D", gate, random.choice([1, 2]), time.time())
+                task = FlightTask(info["flight_id"], "D", gate, random.choice([1, 2]), t)
                 if task:
                     departure_depot.add_task(task)
                     print(f"Time {t}: Departure task for Aircraft {info['flight_id']} created (from {gate} to runway).")
@@ -271,7 +271,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             for tug in tug_list:
                 
                 for task in departure_depot.tasks.queue:
-                    bidders_value_price = tug.bidders_value(task, tug, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
+                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
                     print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
                 for task in arrival_depot.tasks.queue:
@@ -426,6 +426,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
 # To run the simulation standalone:
 if __name__ == "__main__":
+    visualization_speed = 0.01
     run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
 
 

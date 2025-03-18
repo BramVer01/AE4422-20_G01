@@ -186,7 +186,7 @@ class Tug(object):
                 next_node_id = self.path_to_goal[0][0]
                 self.from_to = [path_agent[0][0], next_node_id]
                 self.wait = False
-                print("Path (prioritized) for tug", self.id, ":", path_agent)
+                print("Path found for (prioritized) for tug", self.id) #":", path_agent)
             else:
                 print("No solution found for tug", self.id, "start to switch priority")
                 self.wait = True
@@ -244,23 +244,48 @@ class Tug(object):
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position
 
-    def bidders_value(self, task, tug, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
-        '''returns the max price to pay at the auction (tug allocation)'''
+    # def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
+    #     '''returns the max price to pay at the auction (tug allocation)'''
 
-        success, path = simple_single_agent_astar(nodes_dict, tug.position, task.goal_node, heuristics, t)
-        # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
+    #     success, path = simple_single_agent_astar(nodes_dict, self.start, task.start_node, heuristics, t)
+    #     # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
+        
+    #     if success:
+    #         path_length = len(path)  # number of nodes in the path
+    #     else:
+    #         print(f'for tug {self.id} no path can be found')
+    #         path_length = float(np.inf)  # set path_length to infinity when no path is found
+        
+    #     # TODO: why is delay such a large number, look into this 
+    #     delay = (task.spawn_time - t) 
+
+    #     print(f'path_length = {path_length}, delay = {delay}')
+
+    #     return alpha * (delay)**gamma + beta * path_length
+
+    def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
+        '''returns the max price to pay at the auction (tug allocation)'''
+        
+        # Determine the closest node in nodes_dict to the tug's current position.
+        current_xy = self.position
+        closest_node = min(
+            nodes_dict.keys(),
+            key=lambda n: (nodes_dict[n]["xy_pos"][0] - current_xy[0])**2 + (nodes_dict[n]["xy_pos"][1] - current_xy[1])**2
+        )
+        
+        # Plan path from the closest node to the task's start location.
+        success, path = simple_single_agent_astar(nodes_dict, closest_node, task.start_node, heuristics, t)
         
         if success:
             path_length = len(path)  # number of nodes in the path
         else:
             print('no path can be found')
-            path_length = float(np.inf)  # set path_length to infinity when no path is found
+            path_length = float('inf')
         
-        # TODO: why is delay such a large number, look into this 
-        delay = (task.spawn_time - t ) / 100000000
-
-        print(f'path_length = {path_length}, delay = {delay}')
-
+        delay = (t - task.spawn_time)
+        # print(f'Tug {self.id}: task.spawn_time = {task.spawn_time}, t = {t}')
+        # print(f'Tug {self.id}: path_length = {path_length}, delay = {delay}')
+        
         return alpha * (delay)**gamma + beta * path_length
 
         
