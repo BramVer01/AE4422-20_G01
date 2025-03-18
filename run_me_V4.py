@@ -22,8 +22,13 @@ import matplotlib.pyplot as plt
 
 #%% SET SIMULATION PARAMETERS
 #Input file names (used in import_layout) -> Do not change those unless you want to specify a new layout.
-nodes_file = "nodes.xlsx" #xlsx file with for each node: id, x_pos, y_pos, type
-edges_file = "edges.xlsx" #xlsx file with for each edge: from  (node), to (node), length
+dubai = False  # Whether to use Dubai or baseline network
+if dubai:
+    nodes_file = "nodes_DXB.xlsx"  # xlsx file with for each node: id, x_pos, y_pos, type
+    edges_file = "edges_DXB.xlsx"  # xlsx file with for each edge: from  (node), to (node), length
+else:
+    nodes_file = "nodes.xlsx" #xlsx file with for each node: id, x_pos, y_pos, type
+    edges_file = "edges.xlsx" #xlsx file with for each edge: from  (node), to (node), length
 
 #Parameters that can be changed:
 simulation_time = 100
