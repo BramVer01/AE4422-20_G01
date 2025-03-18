@@ -3,6 +3,8 @@ Run-me.py is the main file of the simulation. Run this file to run the simulatio
 """
 
 import os
+from time import sleep
+
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -17,6 +19,7 @@ from prioritized import run_prioritized_planner
 from cbs import run_CBS
 from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
+from Auctioneer_file import Auctioneer
 import matplotlib.pyplot as plt
 
 
@@ -181,12 +184,15 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         tug_id = i + 1
         if i < total_tugs // 2:
             tug = Tug(tug_id=tug_id, a_d="D", start_node=departure_depot.position, spawn_time=0, nodes_dict=nodes_dict)
-            departure_depot.tugs.put(tug)
+            departure_depot.tugs.append(tug)
         else:
             tug = Tug(tug_id=tug_id, a_d="A", start_node=arrival_depot.position, spawn_time=0, nodes_dict=nodes_dict)
-            arrival_depot.tugs.put(tug)
+            arrival_depot.tugs.append(tug)
         tug_list.append(tug)
         prev_status[tug.id] = tug.status
+
+    # Initialize Auctioneer
+    auctioneer = Auctioneer(tug_list)
 
     # Flight task generator function
     def generate_flight_task(flight_id, t):
@@ -260,13 +266,13 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                 else:
                     departure_depot.add_task(task)
                     print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
-
+        '''
         # --- Print Status Every 10 Seconds ---
         if t == 0 or (t % 10 == 0):
-            dep_tugs_ids = [tug.id for tug in departure_depot.tugs.queue]
-            dep_tasks_ids = [task.flight_id for task in departure_depot.tasks.queue]
-            arr_tugs_ids = [tug.id for tug in arrival_depot.tugs.queue]
-            arr_tasks_ids = [task.flight_id for task in arrival_depot.tasks.queue]
+            dep_tugs_ids = [tug.id for tug in departure_depot.tugs]
+            dep_tasks_ids = [task.flight_id for task in departure_depot.tasks]
+            arr_tugs_ids = [tug.id for tug in arrival_depot.tugs]
+            arr_tasks_ids = [task.flight_id for task in arrival_depot.tasks]
             print(f"\n--- Time {t} Depot Queues ---")
             print("Departure Depot Tugs:", dep_tugs_ids)
             print("Departure Depot Tasks:", dep_tasks_ids)
@@ -275,11 +281,11 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             print("-------------------------------\n")
             for tug in tug_list:
                 
-                for task in departure_depot.tasks.queue:
+                for task in departure_depot.tasks:
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
                     print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
-                for task in arrival_depot.tasks.queue:
+                for task in arrival_depot.tasks:
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
                     print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
@@ -289,7 +295,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                     print(f"  Current goal: {tug.goal}")
                 else:
                     print("  Current path: None")
-
+        '''
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in tug_list:
@@ -313,8 +319,16 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                         total_collisions += 1
                         print(f"Collision detected between Tug {id1} and Tug {id2} at time {t}")
 
-        arrival_depot.match_task(t)
-        departure_depot.match_task(t)
+        # Tasks Assignment
+        tasks_available = departure_depot.tasks + arrival_depot.tasks
+
+        if len(tasks_available) > 0:
+            auctioneer.tug_availability(tug_list)
+            auctioneer.ask_price(tasks_available,nodes_dict,heuristics,t)
+            auctioneer.decision(departure_depot,arrival_depot)
+
+        #arrival_depot.match_task(t)
+        #departure_depot.match_task(t)
 
         if t >= time_end or escape_pressed:
             running = False
@@ -390,15 +404,17 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         for tug in tug_list:
             if tug.status == "idle":
                 if tug.type == "D" and tug.coupled == departure_depot.position:
-                    if tug not in departure_depot.tugs.queue:
-                        departure_depot.tugs.put(tug)
+                    if tug not in departure_depot.tugs:
+                        departure_depot.tugs.append(tug)
                         tug.set_init_tug_params(tug.id, "D", departure_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the departure depot.")
                 elif tug.type == "A" and tug.coupled == arrival_depot.position:
-                    if tug not in arrival_depot.tugs.queue:
-                        arrival_depot.tugs.put(tug)
+                    if tug not in arrival_depot.tugs:
+                        arrival_depot.tugs.append(tug)
                         tug.set_init_tug_params(tug.id, "A", arrival_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the arrival depot.")
+
+
         t = t + dt
 
     # --- Compute Average KPI Values ---
