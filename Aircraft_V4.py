@@ -244,25 +244,6 @@ class Tug(object):
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position
 
-    # def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
-    #     '''returns the max price to pay at the auction (tug allocation)'''
-
-    #     success, path = simple_single_agent_astar(nodes_dict, self.start, task.start_node, heuristics, t)
-    #     # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
-        
-    #     if success:
-    #         path_length = len(path)  # number of nodes in the path
-    #     else:
-    #         print(f'for tug {self.id} no path can be found')
-    #         path_length = float(np.inf)  # set path_length to infinity when no path is found
-        
-    #     # TODO: why is delay such a large number, look into this 
-    #     delay = (task.spawn_time - t) 
-
-    #     print(f'path_length = {path_length}, delay = {delay}')
-
-    #     return alpha * (delay)**gamma + beta * path_length
-
     def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
         '''returns the max price to pay at the auction (tug allocation)'''
         
@@ -274,6 +255,7 @@ class Tug(object):
         )
         
         # Plan path from the closest node to the task's start location.
+        # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
         success, path = simple_single_agent_astar(nodes_dict, closest_node, task.start_node, heuristics, t)
         
         if success:
