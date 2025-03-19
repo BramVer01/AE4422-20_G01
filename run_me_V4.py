@@ -266,7 +266,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                 else:
                     departure_depot.add_task(task)
                     print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
-        '''
+        
         # --- Print Status Every 10 Seconds ---
         if t == 0 or (t % 10 == 0):
             dep_tugs_ids = [tug.id for tug in departure_depot.tugs]
@@ -295,7 +295,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                     print(f"  Current goal: {tug.goal}")
                 else:
                     print("  Current path: None")
-        '''
+        
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in tug_list:
@@ -447,7 +447,9 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
 # To run the simulation standalone:
 if __name__ == "__main__":
-    visualization_speed = 0.01
+    visualization_speed = 0.05
+    total_tugs = 2
+    task_interval = 1
     run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
 
 
