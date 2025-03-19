@@ -21,7 +21,6 @@ class Depot:
 
     def charging(self,dt):   # Charging tugs at depot
         for tug in self.tugs:
-            print('Charging tug: ' + str(tug))
             tug.bat_state = tug.bat_state + tug.bat_charge * dt
             if tug.bat_state > tug.bat_cap:
                 tug.bat_state = tug.bat_cap
