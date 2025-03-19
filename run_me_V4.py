@@ -299,10 +299,6 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in tug_list:
-            print(f'Tug {tug.id} status: {tug.status}')
-            print(f'Tug {tug.id} battery: {int(tug.bat_perc)} %')
-            print(f'Departure Depot Tugs: {departure_depot.tugs}')
-            print(f'Arrival Depot Tugs: {arrival_depot.tugs}')
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
                 current_states[tug.id] = {
