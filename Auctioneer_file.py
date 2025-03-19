@@ -9,7 +9,7 @@ class Auctioneer:
         tugs_available = []
 
         for tug in tugs:
-            if tug.status == 'idle' or tug.status == 'to_depot':   # VOEG NOG 'to_depot' TOE ZODRA TUGS NIET MEER NAAR DE DEPOT HOEVEN TE RIJDEN!!!
+            if tug.status == 'idle' or tug.status == 'to_depot':
                 tugs_available.append(tug)
 
         self.tugs_available = tugs_available
