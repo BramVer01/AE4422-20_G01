@@ -9,7 +9,7 @@ class Auctioneer:
         tugs_available = []
 
         for tug in tugs:
-            if tug.status == 'idle':   # VOEG NOG 'to_depot' TOE ZODRA TUGS NIET MEER NAAR DE DEPOT HOEVEN TE RIJDEN!!!
+            if tug.status == 'idle' or tug.status == 'to_depot':   # VOEG NOG 'to_depot' TOE ZODRA TUGS NIET MEER NAAR DE DEPOT HOEVEN TE RIJDEN!!!
                 tugs_available.append(tug)
 
         self.tugs_available = tugs_available
@@ -46,7 +46,7 @@ class Auctioneer:
 
             if pair[1] in dep_depot.tugs:
                 dep_depot.tugs.remove(pair[1])
-            else:
+            elif pair[1] in arr_depot.tugs:
                 arr_depot.tugs.remove(pair[1])
 
             pair[1].assign_task(pair[0])
