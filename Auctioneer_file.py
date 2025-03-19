@@ -14,15 +14,16 @@ class Auctioneer:
 
         self.tugs_available = tugs_available
 
-    def ask_price(self,tasks,nodes_dict,heuristics,t):   # Inquire each tug about its price for a certain task
+    def ask_price(self,tasks,nodes_dict,heuristics,t,depots):   # Inquire each tug about its price for a certain task
         self.prices = []
         self.price_combinations = []
 
         for task in tasks:
             for tug in self.tugs_available:
-                price = tug.bidders_value(task,nodes_dict,heuristics,t)
-                self.prices.append(price)
-                self.price_combinations.append([task,tug])
+                price,suitable = tug.bidders_value(task,nodes_dict,heuristics,t,depots)
+                if suitable:
+                    self.prices.append(price)
+                    self.price_combinations.append([task,tug])
 
     def decision(self,dep_depot,arr_depot):   # Decide the pairings task/tug based on highest prices (i.e. highest priority and proximity)
         self.pairings = []

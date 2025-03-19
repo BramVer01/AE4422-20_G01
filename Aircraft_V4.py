@@ -1,3 +1,5 @@
+import numpy as np
+
 from single_agent_planner import simple_single_agent_astar, simple_single_agent_astar_prioritized
 import math
 
@@ -18,6 +20,11 @@ class Tug(object):
         
         #Fixed parameters
         self.speed = 1         #how much tug moves per unit of t
+        self.bat_cap = 300     # Battery capacity in Ah
+        self.bat_disc = 4     # Battery discharge in Ah per unit of distance
+        self.bat_charge = 3    # Battery charge in Ah per second
+        self.bat_state = 300   # Current state of the battery in Ah (initially fully charged)
+        self.bat_perc = 100    # Battery charge in %
         self.id = tug_id       #tug_id
         self.type = a_d           #arrival or departure (A/D), also defines to which depot it will return initially
         self.spawntime = spawn_time #spawntime
@@ -103,7 +110,13 @@ class Tug(object):
 
             posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
             posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
-            self.position = (posx, posy)  
+
+            # Battery Discharge
+            dist_bat = np.sqrt((posx-self.position[0])**2+(posy-self.position[1])**2)
+            self.bat_state -= dist_bat * self.bat_disc
+            self.bat_perc = (self.bat_state / self.bat_cap) * 100
+
+            self.position = (posx, posy)
 
         self.get_heading(xy_from, xy_to)	
 
@@ -244,31 +257,48 @@ class Tug(object):
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"] # Initialize position to the start node's position
 
-    def bidders_value(self, task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1):
+    def bidders_value(self, task, nodes_dict, heuristics, t, depots, gamma=1, alpha=1, beta=1, eta=1):
         '''returns the max price to pay at the auction (tug allocation)'''
-        
+        suitable = True
         # Determine the closest node in nodes_dict to the tug's current position.
         current_xy = self.position
         closest_node = min(
             nodes_dict.keys(),
             key=lambda n: (nodes_dict[n]["xy_pos"][0] - current_xy[0])**2 + (nodes_dict[n]["xy_pos"][1] - current_xy[1])**2
         )
+
+        if self.type == 'D':
+            depot_node = depots[0].position
+        else:
+            depot_node = depots[1].position
         
         # Plan path from the closest node to the task's start location.
         # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
         success, path = simple_single_agent_astar(nodes_dict, closest_node, task.start_node, heuristics, t)
+        success_depot, path_depot = simple_single_agent_astar(nodes_dict, task.goal_node, depot_node, heuristics, t)
         
         if success:
             path_length = len(path)  # number of nodes in the path
         else:
             print('no path can be found')
-            path_length = float('inf')
+            suitable = False
         
         delay = (t - task.spawn_time)
         # print(f'Tug {self.id}: task.spawn_time = {task.spawn_time}, t = {t}')
         # print(f'Tug {self.id}: path_length = {path_length}, delay = {delay}')
-        
-        return alpha * (delay)**gamma + beta * path_length
+
+        # Battery check for task
+        if success_depot:
+            path_depot = len(path_depot)
+        else:
+            print('no path can be found')
+            suitable = False
+
+        bat_exp = self.bat_state - ((path_length + path_depot) * 1.5) * self.bat_disc   # Safety factor of 1.5 taken into account
+        if bat_exp < 0:
+            suitable = False
+
+        return alpha * (delay)**gamma + beta / path_length + eta * self.bat_perc, suitable
 
         
 

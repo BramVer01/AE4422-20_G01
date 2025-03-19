@@ -11,13 +11,21 @@ class Depot:
     def __init__(self, depot_id, position):
         self.id = depot_id       # Depot ID
         self.position = position # Depot position (node ID)
-        self.tugs = []      # Queue for idle tugs
-        self.tasks = []     # Queue for flight tasks
+        self.tugs = []      # List of idle tugs in depot
+        self.tasks = []     # List of flight tasks
 
     def add_task(self, task):
         """Add a flight task to the depot queue."""
         self.tasks.append(task)
         print(f"Task {task.flight_id} added to depot {self.id}'s task queue.")
+
+    def charging(self,dt):   # Charging tugs at depot
+        for tug in self.tugs:
+            print('Charging tug: ' + str(tug))
+            tug.bat_state = tug.bat_state + tug.bat_charge * dt
+            if tug.bat_state > tug.bat_cap:
+                tug.bat_state = tug.bat_cap
+            tug.bat_perc = (tug.bat_state / tug.bat_cap) * 100
 '''
     def match_task(self, t):
         """Assign a flight task to an idle tug if available."""

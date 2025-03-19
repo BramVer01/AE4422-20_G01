@@ -280,13 +280,13 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             print("Arrival Depot Tasks:", arr_tasks_ids)
             print("-------------------------------\n")
             for tug in tug_list:
-                
+                print(f'Tug {tug.id} is charged at: {tug.bat_perc} %')
                 for task in departure_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
+                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
                     print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
                 for task in arrival_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, gamma=1, alpha=1, beta=1)
+                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
                     print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
@@ -299,6 +299,10 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in tug_list:
+            print(f'Tug {tug.id} status: {tug.status}')
+            print(f'Tug {tug.id} battery: {int(tug.bat_perc)} %')
+            print(f'Departure Depot Tugs: {departure_depot.tugs}')
+            print(f'Arrival Depot Tugs: {arrival_depot.tugs}')
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
                 current_states[tug.id] = {
@@ -321,14 +325,14 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
         # Tasks Assignment
         tasks_available = departure_depot.tasks + arrival_depot.tasks
-
         if len(tasks_available) > 0:
             auctioneer.tug_availability(tug_list)
-            auctioneer.ask_price(tasks_available,nodes_dict,heuristics,t)
+            auctioneer.ask_price(tasks_available,nodes_dict,heuristics,t,[departure_depot,arrival_depot])
             auctioneer.decision(departure_depot,arrival_depot)
 
-        #arrival_depot.match_task(t)
-        #departure_depot.match_task(t)
+        # Tugs Charging
+        departure_depot.charging(dt)
+        arrival_depot.charging(dt)
 
         if t >= time_end or escape_pressed:
             running = False
