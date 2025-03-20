@@ -25,29 +25,33 @@ class Auctioneer:
                     self.prices.append(price)
                     self.price_combinations.append([task,tug])
 
-    def decision(self,dep_depot,arr_depot):   # Decide the pairings task/tug based on highest prices (i.e. highest priority and proximity)
+    def decision(self, dep_depot, arr_depot):
         self.pairings = []
         tasks_served = []
         tugs_served = []
-
+        
         for i in range(len(self.prices)):
             max_price_idx = self.prices.index(max(self.prices))
-            if self.price_combinations[max_price_idx][0] not in tasks_served and self.price_combinations[max_price_idx][1] not in tugs_served:
-                self.pairings.append([self.price_combinations[max_price_idx][0],self.price_combinations[max_price_idx][1]])
-                tasks_served.append(self.price_combinations[max_price_idx][0])
-                tugs_served.append(self.price_combinations[max_price_idx][1])
+            task = self.price_combinations[max_price_idx][0]
+            tug = self.price_combinations[max_price_idx][1]
+            
+            if task not in tasks_served and tug not in tugs_served:
+                # Attempt to assign the task
+                if tug.assign_task(task):  # Returns True if assignment successful
+                    self.pairings.append([task, tug])
+                    tasks_served.append(task)
+                    tugs_served.append(tug)
+                    
+                    # Remove the task and tug from their respective depots
+                    if task in dep_depot.tasks:
+                        dep_depot.tasks.remove(task)
+                    else:
+                        arr_depot.tasks.remove(task)
+                        
+                    if tug in dep_depot.tugs:
+                        dep_depot.tugs.remove(tug)
+                    elif tug in arr_depot.tugs:
+                        arr_depot.tugs.remove(tug)
+                
             del self.prices[max_price_idx]
             del self.price_combinations[max_price_idx]
-
-        for pair in self.pairings:
-            if pair[0] in dep_depot.tasks:
-                dep_depot.tasks.remove(pair[0])
-            else:
-                arr_depot.tasks.remove(pair[0])
-
-            if pair[1] in dep_depot.tugs:
-                dep_depot.tugs.remove(pair[1])
-            elif pair[1] in arr_depot.tugs:
-                arr_depot.tugs.remove(pair[1])
-
-            pair[1].assign_task(pair[0])

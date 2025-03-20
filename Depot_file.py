@@ -19,12 +19,14 @@ class Depot:
         self.tasks.append(task)
         print(f"Task {task.flight_id} added to depot {self.id}'s task queue.")
 
-    def charging(self,dt):   # Charging tugs at depot
+    def charging(self, dt):
         for tug in self.tugs:
-            tug.bat_state = tug.bat_state + tug.bat_charge * dt
-            if tug.bat_state > tug.bat_cap:
-                tug.bat_state = tug.bat_cap
-            tug.bat_perc = (tug.bat_state / tug.bat_cap) * 100
+            if tug.status == "idle" and tug.bat_perc < 100:
+                tug.bat_state += tug.bat_charge * dt
+                tug.bat_state = min(tug.bat_state, tug.bat_cap)  # Don't exceed max capacity
+                tug.bat_perc = (tug.bat_state / tug.bat_cap) * 100
+                if tug.bat_perc >= 99.9:
+                    print(f"Tug {tug.id} is now fully charged")
 '''
     def match_task(self, t):
         """Assign a flight task to an idle tug if available."""
