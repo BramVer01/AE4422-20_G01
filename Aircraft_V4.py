@@ -294,7 +294,7 @@ class Tug(object):
         if self.bat_perc < 30:
             battery_factor = 0.05  # Strongly discourage taking tasks when battery is low
         elif self.bat_perc < 50:
-            battery_factor = 0.2  # Somewhat discourage taking tasks when battery is getting low
+            battery_factor = 0.1  # Somewhat discourage taking tasks when battery is getting low
         elif self.bat_perc > 80:
             battery_factor = 1.5  # Encourage taking tasks when battery is high
         
