@@ -123,7 +123,7 @@ class Tug(object):
         self.get_heading(xy_from, xy_to)	
 
         #Check if goal is reached or if to_node is reached
-        if self.position == xy_to and self.path_to_goal[0][1] == t+dt: #If with this move its current to node is reached
+        if self.position == xy_to and self.path_to_goal[0][1] == round(t+dt,1): #If with this move its current to node is reached
             if self.position == self.nodes_dict[self.goal]["xy_pos"]: #if the final goal is reached
                 self.wait = True
                 if self.status == "moving_to_task":
