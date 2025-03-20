@@ -14,44 +14,55 @@ class Auctioneer:
 
         self.tugs_available = tugs_available
 
-    def ask_price(self,tasks,nodes_dict,heuristics,t,depots):   # Inquire each tug about its price for a certain task
+    def ask_price(self, tasks, nodes_dict, heuristics, t, depots):
+        """Inquire each tug about its price for a certain task"""
         self.prices = []
         self.price_combinations = []
-
-        for task in tasks:
+        
+        # Only consider tasks that are not already being executed
+        active_tasks = [task for task in tasks if task.flight_id not in [tug.current_task for tug in self.tugs_available if tug.current_task is not None]]
+        
+        for task in active_tasks:
             for tug in self.tugs_available:
-                price,suitable = tug.bidders_value(task,nodes_dict,heuristics,t,depots)
+                # Skip if tug is already assigned to a task
+                if tug.status not in ['idle', 'to_depot']:
+                    continue
+                    
+                price, suitable = tug.bidders_value(task, nodes_dict, heuristics, t, depots)
                 if suitable:
                     self.prices.append(price)
-                    self.price_combinations.append([task,tug])
+                    self.price_combinations.append([task, tug])
 
     def decision(self, dep_depot, arr_depot):
         self.pairings = []
         tasks_served = []
         tugs_served = []
         
-        for i in range(len(self.prices)):
-            max_price_idx = self.prices.index(max(self.prices))
-            task = self.price_combinations[max_price_idx][0]
-            tug = self.price_combinations[max_price_idx][1]
+        # Sort price combinations by price (highest first)
+        sorted_bids = sorted(zip(self.prices, self.price_combinations), key=lambda x: x[0], reverse=True)
+
+        
+        # Go through sorted bids
+        for price, combo in sorted_bids:
+            task, tug = combo
             
-            if task not in tasks_served and tug not in tugs_served:
-                # Attempt to assign the task
-                if tug.assign_task(task):  # Returns True if assignment successful
-                    self.pairings.append([task, tug])
-                    tasks_served.append(task)
-                    tugs_served.append(tug)
-                    
-                    # Remove the task and tug from their respective depots
-                    if task in dep_depot.tasks:
-                        dep_depot.tasks.remove(task)
-                    else:
-                        arr_depot.tasks.remove(task)
-                        
-                    if tug in dep_depot.tugs:
-                        dep_depot.tugs.remove(tug)
-                    elif tug in arr_depot.tugs:
-                        arr_depot.tugs.remove(tug)
+            # Skip if task or tug already allocated
+            if task in tasks_served or tug in tugs_served:
+                continue
                 
-            del self.prices[max_price_idx]
-            del self.price_combinations[max_price_idx]
+            # Try to assign the task
+            if tug.assign_task(task):
+                self.pairings.append([task, tug])
+                tasks_served.append(task)
+                tugs_served.append(tug)
+                
+                # Remove from depots
+                if task in dep_depot.tasks:
+                    dep_depot.tasks.remove(task)
+                else:
+                    arr_depot.tasks.remove(task)
+                    
+                if tug in dep_depot.tugs:
+                    dep_depot.tugs.remove(tug)
+                elif tug in arr_depot.tugs:
+                    arr_depot.tugs.remove(tug)

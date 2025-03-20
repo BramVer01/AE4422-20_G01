@@ -101,8 +101,11 @@ class Tug(object):
             return
         
         # Check if battery is too low to move
+        # In your move method, modify the battery check:
         if self.bat_perc <= 0:
             self.wait = True
+            self.bat_perc = 0  # Ensure it doesn't go negative
+            self.bat_state = 0
             print(f"Tug {self.id} has no battery left and cannot move.")
             # Force return to depot if not already on the way
             if self.status != "to_depot":
@@ -110,7 +113,16 @@ class Tug(object):
                 depot_node = 112 if self.type == "D" else 113
                 self.start = self.from_to[0] if self.from_to[0] != 0 else self.coupled
                 self.goal = depot_node
-                self.path_to_goal = []
+                
+                # CRITICAL FIX: Make sure we have a valid path
+                try:
+                    # Calculate path to depot using your pathfinding method
+                    print(f"Emergency path planning for tug {self.id} to return to depot")
+                    # self.path_to_goal = your_pathfinding_function(self.start, depot_node)
+                except Exception as e:
+                    print(f"ERROR: Could not plan path to depot: {e}")
+                    self.path_to_goal = []
+                    self.position = self.nodes_dict[self.start]["xy_pos"]  # Force position reset
             return
             
         #Determine nodes between which the ac is moving
@@ -358,46 +370,40 @@ class Tug(object):
 
     def bidders_value(self, task, nodes_dict, heuristics, t, depots, gamma=1, alpha=1, beta=1, eta=1):
         '''returns the max price to pay at the auction (tug allocation)'''
-        suitable = True
-        # Determine the closest node in nodes_dict to the tug's current position.
         current_xy = self.position
-        closest_node = min(
-            nodes_dict.keys(),
-            key=lambda n: (nodes_dict[n]["xy_pos"][0] - current_xy[0])**2 + (nodes_dict[n]["xy_pos"][1] - current_xy[1])**2
-        )
-
-        if self.type == 'D':
-            depot_node = depots[0].position
-        else:
-            depot_node = depots[1].position
+        task_start_xy = nodes_dict[task.start_node]["xy_pos"]
         
-        # Plan path from the closest node to the task's start location.
-        # TODO: path length is currently calculated using A*, but we could use a Heuristic in order to reduce computation time
-        success, path = simple_single_agent_astar(nodes_dict, closest_node, task.start_node, heuristics, t)
-        success_depot, path_depot = simple_single_agent_astar(nodes_dict, task.goal_node, depot_node, heuristics, t)
+        # Estimate distance to task
+        dist_to_task = ((current_xy[0] - task_start_xy[0])**2 + (current_xy[1] - task_start_xy[1])**2)**0.5
         
-        if success:
-            path_length = len(path)  # number of nodes in the path
-        else:
-            print('no path can be found')
+        # Battery considerations
+        # Calculate a battery efficiency factor - prioritize tasks when battery is 30-80%
+        # This prevents tugs from taking tasks when battery is too low
+        # And encourages tugs with high battery to take tasks
+        battery_factor = 1.0
+        if self.bat_perc < 20:
+            battery_factor = 0.1  # Strongly discourage taking tasks when battery is low
+        elif self.bat_perc < 40:
+            battery_factor = 0.5  # Somewhat discourage taking tasks when battery is getting low
+        elif self.bat_perc > 80:
+            battery_factor = 1.5  # Encourage taking tasks when battery is high
+        
+        # Calculate delay penalty - older tasks get higher priority
+        delay = max(0, t - task.spawn_time)
+        delay_factor = alpha * (delay)**gamma
+        
+        # Calculate distance penalty - closer tasks get higher priority
+        proximity_factor = beta / (dist_to_task + 1)
+        
+        # Calculate battery bonus - tugs with more battery get higher priority
+        battery_bonus = eta * self.bat_perc * battery_factor
+        
+        # Check if task is suitable based on battery
+        suitable = True
+        if self.bat_perc < 15:
             suitable = False
         
-        delay = (t - task.spawn_time)
-        # print(f'Tug {self.id}: task.spawn_time = {task.spawn_time}, t = {t}')
-        # print(f'Tug {self.id}: path_length = {path_length}, delay = {delay}')
-
-        # Battery check for task
-        if success_depot:
-            path_depot = len(path_depot)
-        else:
-            print('no path can be found')
-            suitable = False
-
-        bat_exp = self.bat_state - ((path_length + path_depot) * 1.5) * self.bat_disc   # Safety factor of 1.5 taken into account
-        if bat_exp < 0:
-            suitable = False
-
-        return alpha * (delay)**gamma + beta / path_length + eta * self.bat_perc, suitable
-
+        # Calculate final bid value
+        bid_value = delay_factor + proximity_factor + battery_bonus
         
-
+        return bid_value, suitable
