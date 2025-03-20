@@ -22,7 +22,7 @@ class Tug(object):
         self.speed = 1         #how much tug moves per unit of t
         self.bat_cap = 300     # Battery capacity in Ah
         self.bat_disc = 4     # Battery discharge in Ah per unit of distance
-        self.bat_charge = 3    # Battery charge in Ah per second
+        self.bat_charge = 20    # Battery charge in Ah per second
         self.bat_state = 300   # Current state of the battery in Ah (initially fully charged)
         self.bat_perc = 100    # Battery charge in %
         self.id = tug_id       #tug_id
@@ -81,21 +81,56 @@ class Tug(object):
         """
         Moves an aircraft between from_node and to_node and checks if to_node or goal is reached.
         INPUT:
-            - dt = 
-            - t = 
+            - dt = time step
+            - t = current time
         """
         
+        # Check if path_to_goal is empty
+        if not self.path_to_goal:
+            # Nothing to move, tug is waiting
+            # Charge battery when at depot
+            if self.status == "idle" and (self.coupled == 112 or self.coupled == 113):
+                if self.bat_perc < 100:
+                    # Charge battery
+                    self.bat_state += self.bat_charge * dt
+                    if self.bat_state > self.bat_cap:
+                        self.bat_state = self.bat_cap
+                    self.bat_perc = (self.bat_state / self.bat_cap) * 100
+                    if t % 5 == 0:  # Print charging status every 5 time units to avoid console spam
+                        print(f"Tug {self.id} charging at depot, battery at {self.bat_perc:.1f}%")
+            return
+        
+        # Check if battery is too low to move
+        if self.bat_perc <= 0:
+            self.wait = True
+            print(f"Tug {self.id} has no battery left and cannot move.")
+            # Force return to depot if not already on the way
+            if self.status != "to_depot":
+                self.status = "to_depot"
+                depot_node = 112 if self.type == "D" else 113
+                self.start = self.from_to[0] if self.from_to[0] != 0 else self.coupled
+                self.goal = depot_node
+                self.path_to_goal = []
+            return
+            
         #Determine nodes between which the ac is moving
         from_node = self.from_to[0]
         to_node = self.from_to[1]
+        
+        # Safety check for valid node IDs
+        if from_node == 0 or to_node == 0 or from_node not in self.nodes_dict or to_node not in self.nodes_dict:
+            print(f"Warning: Invalid node ID - from_node: {from_node}, to_node: {to_node}")
+            self.wait = True
+            return
+        
         xy_from = self.nodes_dict[from_node]["xy_pos"] #xy position of from node
         xy_to = self.nodes_dict[to_node]["xy_pos"] #xy position of to node
         distance_to_move = self.speed*dt #distance to move in this timestep
-  
+
         #Update position with rounded values
         if xy_from == xy_to or self.wait:
             # Waiting: position remains the same.
-            self.position = self.position
+            pass
         else:
             x = xy_to[0]-xy_from[0]
             y = xy_to[1]-xy_from[1]
@@ -108,8 +143,8 @@ class Tug(object):
                 x_normalized = x / distance
                 y_normalized = y / distance
 
-            posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
-            posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
+            posx = round(self.position[0] + x_normalized * distance_to_move, 2) #round to prevent errors
+            posy = round(self.position[1] + y_normalized * distance_to_move, 2) #round to prevent errors
 
             # Battery Discharge
             dist_bat = np.sqrt((posx-self.position[0])**2+(posy-self.position[1])**2)
@@ -118,10 +153,10 @@ class Tug(object):
 
             self.position = (posx, posy)
 
-        self.get_heading(xy_from, xy_to)	
+        self.get_heading(xy_from, xy_to)    
 
-        #Check if goal is reached or if to_node is reached
-        if self.position == xy_to and self.path_to_goal[0][1] == t+dt: #If with this move its current to node is reached
+        # Check if we've reached a node
+        if self.position == xy_to and len(self.path_to_goal) > 0 and self.path_to_goal[0][1] == t+dt: 
             if self.position == self.nodes_dict[self.goal]["xy_pos"]: #if the final goal is reached
                 self.wait = True
                 if self.status == "moving_to_task":
@@ -151,6 +186,10 @@ class Tug(object):
                 remaining_path = self.path_to_goal
                 self.path_to_goal = remaining_path[1:]
                 
+                if not self.path_to_goal:  # If we've exhausted the path
+                    self.wait = True
+                    return
+                    
                 new_from_id = self.from_to[1] #new from node
                 new_next_id = self.path_to_goal[0][0] #new to node
 
@@ -199,13 +238,25 @@ class Tug(object):
                     depot_node = 112 if self.type == "D" else 113
                     self.start = self.from_to[0] if hasattr(self, 'from_to') and self.from_to[0] != 0 else start_node
                     self.goal = depot_node
+                    goal_node = depot_node  # Update the goal for path planning
             
+            # Make sure we have valid nodes for planning
+            if start_node == 0 or goal_node == 0 or start_node not in nodes_dict or goal_node not in nodes_dict:
+                print(f"Warning: Invalid nodes for planning. start_node: {start_node}, goal_node: {goal_node}")
+                self.wait = True
+                return
+                
             # Call the prioritized A* function
             success, path_agent = simple_single_agent_astar_prioritized(
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
             )
             
             if success:
+                if not path_agent or len(path_agent) < 2:  # Path too short or empty
+                    print(f"Path found but invalid for tug {self.id}, waiting")
+                    self.wait = True
+                    return
+                    
                 self.path_to_goal = path_agent[1:]
                 if len(self.path_to_goal) > 0:  # Check if path is not empty
                     next_node_id = self.path_to_goal[0][0]

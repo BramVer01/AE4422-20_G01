@@ -306,7 +306,8 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                     "xy_pos": tug.position,
                     "heading": tug.heading,
                     "has_flight": has_flight,
-                    "status": tug.status
+                    "status": tug.status,
+                    "bat_perc": tug.bat_perc  # Add battery percentage
                 }
         if visualization:
             escape_pressed = map_running(map_properties, current_states, t)

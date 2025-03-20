@@ -303,15 +303,35 @@ def map_running(map_properties, current_states, t):  # function to update the ma
         for vehicle in current_states.keys():
             label = 'TUG: '
             id_string = label + str(current_states[vehicle]["tug_id"])  # create string with ID
-            # If the tug's status is executing, use green; otherwise, use orange if not has_flight, else red.
+            
+            # Determine text color based on status
             if current_states[vehicle].get("status") == "executing":
                 col = green
             else:
                 col = orange if not current_states[vehicle].get("has_flight", False) else red
+                
+            # Display tug ID
             plot_text(scr, id_string, col, 14, reso, 
                     current_states[vehicle]["xy_pos"][0], 
                     current_states[vehicle]["xy_pos"][1], 
                     min_x, max_y, x_range, y_range, 0, 25)
+            
+            # Display battery percentage if available
+            if "bat_perc" in current_states[vehicle]:
+                bat_string = f"{current_states[vehicle]['bat_perc']:.0f}%"
+                
+                # Color code the battery level: red if below 15%, orange if below 30%, green otherwise
+                if current_states[vehicle]["bat_perc"] < 15:
+                    bat_col = purple
+                elif current_states[vehicle]["bat_perc"] < 30:
+                    bat_col = red
+                else:
+                    bat_col = black
+                    
+                plot_text(scr, bat_string, bat_col, 14, reso, 
+                        current_states[vehicle]["xy_pos"][0], 
+                        current_states[vehicle]["xy_pos"][1], 
+                        min_x, max_y, x_range, y_range, 0, 40)  # 40 pixels below the ID text
 
     # collision=False
     # for tug1 in current_states:
