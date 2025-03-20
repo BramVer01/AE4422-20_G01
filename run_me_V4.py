@@ -283,11 +283,11 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                 print(f'Tug {tug.id} is charged at: {tug.bat_perc} %')
                 for task in departure_depot.tasks:
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
-                    print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
+                    #print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
                 for task in arrival_depot.tasks:
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
-                    print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
+                    #print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
                 
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
                 if hasattr(tug, 'path_to_goal'):

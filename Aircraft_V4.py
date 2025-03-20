@@ -106,7 +106,7 @@ class Tug(object):
             self.wait = True
             self.bat_perc = 0  # Ensure it doesn't go negative
             self.bat_state = 0
-            print(f"Tug {self.id} has no battery left and cannot move.")
+            #print(f"Tug {self.id} has no battery left and cannot move.")
             # Force return to depot if not already on the way
             if self.status != "to_depot":
                 self.status = "to_depot"
@@ -240,7 +240,7 @@ class Tug(object):
         if self.status in ["moving_to_task", "executing", "to_depot"] and not self.path_to_goal:
             start_node = self.start
             goal_node = self.goal
-            
+
             # Check if the battery is too low to continue
             if self.bat_perc < 15:  # 15% battery threshold
                 print(f"Tug {self.id} battery too low ({self.bat_perc:.1f}%). Returning to depot.")
@@ -251,24 +251,24 @@ class Tug(object):
                     self.start = self.from_to[0] if hasattr(self, 'from_to') and self.from_to[0] != 0 else start_node
                     self.goal = depot_node
                     goal_node = depot_node  # Update the goal for path planning
-            
+
             # Make sure we have valid nodes for planning
             if start_node == 0 or goal_node == 0 or start_node not in nodes_dict or goal_node not in nodes_dict:
                 print(f"Warning: Invalid nodes for planning. start_node: {start_node}, goal_node: {goal_node}")
                 self.wait = True
                 return
-                
+
             # Call the prioritized A* function
             success, path_agent = simple_single_agent_astar_prioritized(
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
             )
-            
+
             if success:
                 if not path_agent or len(path_agent) < 2:  # Path too short or empty
                     print(f"Path found but invalid for tug {self.id}, waiting")
                     self.wait = True
                     return
-                    
+
                 self.path_to_goal = path_agent[1:]
                 if len(self.path_to_goal) > 0:  # Check if path is not empty
                     next_node_id = self.path_to_goal[0][0]
@@ -288,62 +288,50 @@ class Tug(object):
                         path_agent.path_to_goal = []
                         path_agent.wait = True
                         path_agent.start = path_agent.from_to[0] if hasattr(path_agent, 'from_to') and path_agent.from_to[0] != 0 else start_node
-                # # this is new to prevent the simulation from stopping when no path is found using prio A*
-                # success, path = simple_single_agent_astar(nodes_dict, start_node, goal_node, heuristics, t)
 
-                # if success:
-                #     self.path_to_goal = path[1:]
-                #     next_node_id = self.path_to_goal[0][0]
-                #     self.from_to = [path[0][0], next_node_id]
-                #     self.wait = False
-                #     # print("Path (prioritized) for tug", self.id, ":", path)
-                
-                # else:
-                #     raise Exception("No solution found for tug", self.id)
-            
-            # Optionally, verify that the planning start time matches.
-            # if path_agent[0][1] != t:
-            #     raise Exception("Timing error in path planning for tug", self.id)
 
     def assign_task(self, task):
         """Assign a flight task to this tug."""
         # First check if the tug has enough battery to handle this task
-        closest_node = min(
-            self.nodes_dict.keys(),
-            key=lambda n: (self.nodes_dict[n]["xy_pos"][0] - self.position[0])**2 + 
-                        (self.nodes_dict[n]["xy_pos"][1] - self.position[1])**2
-        )
-        
-        # Calculate if there's enough battery for the full journey
-        # (to task start + execute task + return to depot)
         depot_node = 112 if self.type == "D" else 113
-        
-        # Simple distance estimation (could be improved)
-        est_distance_to_task = ((self.nodes_dict[task.start_node]["xy_pos"][0] - self.position[0])**2 + 
-                            (self.nodes_dict[task.start_node]["xy_pos"][1] - self.position[1])**2)**0.5
-        
-        est_distance_for_task = ((self.nodes_dict[task.goal_node]["xy_pos"][0] - self.nodes_dict[task.start_node]["xy_pos"][0])**2 + 
-                                (self.nodes_dict[task.goal_node]["xy_pos"][1] - self.nodes_dict[task.start_node]["xy_pos"][1])**2)**0.5
-        
-        est_distance_to_depot = ((self.nodes_dict[depot_node]["xy_pos"][0] - self.nodes_dict[task.goal_node]["xy_pos"][0])**2 + 
-                                (self.nodes_dict[depot_node]["xy_pos"][1] - self.nodes_dict[task.goal_node]["xy_pos"][1])**2)**0.5
-        
-        total_est_distance = (est_distance_to_task + est_distance_for_task + est_distance_to_depot) * 1.5  # Safety factor
+
+        # Estimate the distances for the task: to task, to goal, and return to depot
+        dist_to_task = np.sqrt(
+            (self.nodes_dict[task.start_node]["xy_pos"][0] - self.position[0]) ** 2 +
+            (self.nodes_dict[task.start_node]["xy_pos"][1] - self.position[1]) ** 2
+        )
+
+        dist_for_task = np.sqrt(
+            (self.nodes_dict[task.goal_node]["xy_pos"][0] - self.nodes_dict[task.start_node]["xy_pos"][0]) ** 2 +
+            (self.nodes_dict[task.goal_node]["xy_pos"][1] - self.nodes_dict[task.start_node]["xy_pos"][1]) ** 2
+        )
+
+        dist_to_depot = np.sqrt(
+            (self.nodes_dict[depot_node]["xy_pos"][0] - self.nodes_dict[task.goal_node]["xy_pos"][0]) ** 2 +
+            (self.nodes_dict[depot_node]["xy_pos"][1] - self.nodes_dict[task.goal_node]["xy_pos"][1]) ** 2
+        )
+
+        # Total estimated distance (safety margin of 1.5x for unforeseen circumstances)
+        total_est_distance = (dist_to_task + dist_for_task + dist_to_depot) * 1.5
+
+        # Calculate the battery required for the full trip
         required_battery = total_est_distance * self.bat_disc
-        
+
+        # Check if the tug has enough battery for the entire task
         if self.bat_state < required_battery:
-            print(f"Tug {self.id} cannot accept task {task.flight_id} due to insufficient battery ({self.bat_perc:.1f}%)")
+            #print(f"Tug {self.id} cannot accept task {task.flight_id} due to insufficient battery ({self.bat_perc:.1f}%)")
             return False
-        
+
         print(f"Assigning task {task.flight_id} to tug {self.id}. Current status: {self.status}")
         self.current_task = task.flight_id
-        self.goal = task.start_node  
-        self.final_goal = task.goal_node  
+        self.goal = task.start_node
+        self.final_goal = task.goal_node
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning
         print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
         return True
+
     
 
     def set_init_tug_params(self, tug_id, a_d, start_node, nodes_dict):
