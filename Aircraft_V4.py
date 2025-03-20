@@ -111,7 +111,14 @@ class Tug(object):
 
             posx = round(self.position[0] + x_normalized * distance_to_move ,2) #round to prevent errors
             posy = round(self.position[1] + y_normalized * distance_to_move ,2) #round to prevent errors
-            self.position = (posx, posy)  
+             
+
+            # Battery Discharge
+            dist_bat = np.sqrt((posx-self.position[0])**2+(posy-self.position[1])**2)
+            self.bat_state -= dist_bat * self.bat_disc
+            self.bat_perc = (self.bat_state / self.bat_cap) * 100
+
+            self.position = (posx, posy) 
 
         self.get_heading(xy_from, xy_to)	
 
@@ -284,10 +291,10 @@ class Tug(object):
         # This prevents tugs from taking tasks when battery is too low
         # And encourages tugs with high battery to take tasks
         battery_factor = 1.0
-        if self.bat_perc < 20:
-            battery_factor = 0.1  # Strongly discourage taking tasks when battery is low
-        elif self.bat_perc < 40:
-            battery_factor = 0.5  # Somewhat discourage taking tasks when battery is getting low
+        if self.bat_perc < 30:
+            battery_factor = 0.05  # Strongly discourage taking tasks when battery is low
+        elif self.bat_perc < 50:
+            battery_factor = 0.2  # Somewhat discourage taking tasks when battery is getting low
         elif self.bat_perc > 80:
             battery_factor = 1.5  # Encourage taking tasks when battery is high
         

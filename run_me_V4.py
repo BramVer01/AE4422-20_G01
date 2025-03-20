@@ -448,7 +448,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
 # To run the simulation standalone:
 if __name__ == "__main__":
-    visualization_speed = 0.05
+    visualization_speed = 0.001
     total_tugs = 3
     task_interval = 0.5
     run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
