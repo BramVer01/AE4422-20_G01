@@ -18,7 +18,6 @@ from cbs import run_CBS
 from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
 import matplotlib.pyplot as plt
-from ATC import ATC
 
 
 #%% SET SIMULATION PARAMETERS
@@ -165,8 +164,8 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
     graph = create_graph(nodes_dict, edges_dict, plot_graph)
     heuristics = calc_heuristics(graph, nodes_dict)
 
-    atc = ATC()
     # Initialize list to track all tug agents
+    tug_list = []
 
     # Initialize depots
     departure_depot = Depot(1, position=112)
@@ -181,7 +180,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         else:
             tug = Tug(tug_id=tug_id, a_d="A", start_node=arrival_depot.position, spawn_time=0, nodes_dict=nodes_dict)
             arrival_depot.tugs.put(tug)
-        atc.tug_list.append(tug)
+        tug_list.append(tug)
         prev_status[tug.id] = tug.status
 
     # Flight task generator function
@@ -192,7 +191,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             available_gates = [gate for gate in [97, 34, 35, 36, 98] if gate not in gate_status]
             if available_gates:
                 goal_node = random.choice(available_gates)
-                gate_status[goal_node] = {"release_time": t + 10, "flight_id": flight_id}
+                gate_status[goal_node] = {"release_time": t + 10 + random.choice([0, 0, 2, 4, 6]), "arrival_time": t, "flight_id": flight_id}
                 print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+10}")
             else:
                 goal_node = "waiting"
@@ -228,7 +227,11 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
-                print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure.")
+                if "arrival_time" in info:
+                    delay = t - info["arrival_time"] - 10
+                else:
+                    delay = "UNKNOWN"  # This prevents errors if no waiting time is found
+                print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure. It had a delay of {delay} seconds.")
                 task = FlightTask(info["flight_id"], "D", gate, random.choice([1, 2]), time.time())
                 if task:
                     departure_depot.add_task(task)
@@ -236,7 +239,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                 del gate_status[gate]
                 if "waiting_aircraft" in globals() and waiting_aircraft:
                     next_aircraft = waiting_aircraft.pop(0)
-                    gate_status[gate] = {"release_time": t + 10, "flight_id": next_aircraft.flight_id}
+                    gate_status[gate] = {"release_time": t, "flight_id": next_aircraft.flight_id}
                     next_aircraft.goal_node = gate
                     print(f"Time {t}: Waiting aircraft {next_aircraft.flight_id} is now assigned to gate {gate}.")
 
@@ -269,7 +272,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             print("Arrival Depot Tugs:", arr_tugs_ids)
             print("Arrival Depot Tasks:", arr_tasks_ids)
             print("-------------------------------\n")
-            for tug in atc.tug_list:
+            for tug in tug_list:
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
                 if hasattr(tug, 'path_to_goal'):
                     print(f"  Current path: {tug.path_to_goal}")
@@ -279,7 +282,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
-        for tug in atc.tug_list:
+        for tug in tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
                 current_states[tug.id] = {
@@ -311,19 +314,19 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
         # --- Run Planning ---
         if planner == "Independent":
-            for tug in atc.tug_list:
+            for tug in tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
                     run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
         elif planner == "Prioritized":
-            for tug in atc.tug_list:
+            for tug in tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
+                    constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
         elif planner == "CBS":
             run_CBS()
         else:
             raise Exception("Planner:", planner, "is not defined.")
 
-        for tug in atc.tug_list:
+        for tug in tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 tug.move(dt, t)
         
@@ -331,7 +334,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         # We record two time metrics:
         #   1. Execution Time (old KPI): from when a tug enters "executing" until it transitions to "to_depot".
         #   2. Total Task Time (new KPI): from when a tug is assigned a task (idle -> moving_to_task) until it returns to "idle".
-        for tug in atc.tug_list:
+        for tug in tug_list:
             current_node = getattr(tug, 'current_node', tug.start)
             # Record total task start time when a tug is assigned a task:
             if prev_status[tug.id] == "idle" and tug.status == "moving_to_task":
@@ -374,7 +377,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             prev_status[tug.id] = tug.status
 
         # --- Update Depot Queues for Idle Tugs ---
-        for tug in atc.tug_list:
+        for tug in tug_list:
             if tug.status == "idle":
                 if tug.type == "D" and tug.coupled == departure_depot.position:
                     if tug not in departure_depot.tugs.queue:
