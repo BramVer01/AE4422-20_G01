@@ -20,33 +20,42 @@ from cbs import run_CBS
 from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
 from Auctioneer_file import Auctioneer
-import matplotlib.pyplot as plt
 
+#%% SIMULATION PARAMETERS
+# Layout parameters
+DUBAI_LAYOUT = False  # Whether to use Dubai or baseline network
+NODES_FILE = "nodes_DXB.xlsx" if DUBAI_LAYOUT else "nodes.xlsx"
+EDGES_FILE = "edges_DXB.xlsx" if DUBAI_LAYOUT else "edges.xlsx"
 
-#%% SET SIMULATION PARAMETERS
-#Input file names (used in import_layout) -> Do not change those unless you want to specify a new layout.
-dubai = False  # Whether to use Dubai or baseline network
-if dubai:
-    nodes_file = "nodes_DXB.xlsx"  # xlsx file with for each node: id, x_pos, y_pos, type
-    edges_file = "edges_DXB.xlsx"  # xlsx file with for each edge: from  (node), to (node), length
-else:
-    nodes_file = "nodes.xlsx" #xlsx file with for each node: id, x_pos, y_pos, type
-    edges_file = "edges.xlsx" #xlsx file with for each edge: from  (node), to (node), length
+# Simulation settings
+SIMULATION_TIME = 100
+PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+DELTA_T = 0.5  # Time step for planning
+DT = 0.1  # Time step for movement
 
-#Parameters that can be changed:
-simulation_time = 100
-planner = "Prioritized" #choose which planner to use (currently only Independent is implemented)
+# Visualization settings
+PLOT_GRAPH = False  # Show graph representation in NetworkX
+VISUALIZATION = True  # Enable pygame visualization
+VISUALIZATION_SPEED = 0.01  # Visualization update speed (seconds)
 
-#Visualization (can also be changed)
-plot_graph = False    #show graph representation in NetworkX
-visualization = True        #pygame visualization
-visualization_speed = 0.1 #set at 0.1 as default
+# Task and tug settings
+TASK_INTERVAL = 1  # Generate a task every X seconds
+TOTAL_TUGS = 4  # Total number of tugs (split evenly between depots)
 
-task_interval = 5    # New: generate a task every 5 seconds
-total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+# Node IDs (previously hardcoded)
+DEPARTURE_DEPOT_POSITION = 112
+ARRIVAL_DEPOT_POSITION = 113
+ARRIVAL_RUNWAY_NODES = [37, 38]
+GATE_NODES = [97, 34, 35, 36, 98]
+DEPARTURE_RUNWAY_NODES = [1, 2]
+GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
+# Bidding parameters (previously hardcoded in print statements)
+GAMMA = 1
+ALPHA = 1
+BETA = 1
 
-#%%Function definitions
+#%% Function definitions
 def import_layout(nodes_file, edges_file):
     """
     Imports layout information from xlsx files and converts this into dictionaries.
@@ -58,56 +67,60 @@ def import_layout(nodes_file, edges_file):
         - edges_dict = dictionary with edges annd edge properties
         - start_and_goal_locations = dictionary with node ids for arrival runways, departure runways and gates 
     """
-    gates_xy = []   #lst with (x,y) positions of gates
-    rwy_dep_xy = [] #lst with (x,y) positions of entry points of departure runways
-    rwy_arr_xy = [] #lst with (x,y) positions of exit points of arrival runways
+    gates_xy = []   # List with (x,y) positions of gates
+    rwy_dep_xy = [] # List with (x,y) positions of entry points of departure runways
+    rwy_arr_xy = [] # List with (x,y) positions of exit points of arrival runways
     
     df_nodes = pd.read_excel(os.path.join(os.getcwd(), nodes_file))
     df_edges = pd.read_excel(os.path.join(os.getcwd(), edges_file))
     
-    #Create nodes_dict from df_nodes
+    # Create nodes_dict from df_nodes
     nodes_dict = {}
     for i, row in df_nodes.iterrows():
-        node_properties = {"id": row["id"],
-                           "x_pos": row["x_pos"],
-                           "y_pos": row["y_pos"],
-                           "xy_pos": (row["x_pos"],row["y_pos"]),
-                           "type": row["type"],
-                           "neighbors": set()
-                           }
+        node_properties = {
+            "id": row["id"],
+            "x_pos": row["x_pos"],
+            "y_pos": row["y_pos"],
+            "xy_pos": (row["x_pos"], row["y_pos"]),
+            "type": row["type"],
+            "neighbors": set()
+        }
         node_id = row["id"]
         nodes_dict[node_id] = node_properties
         
-        #Add node type
+        # Add node type
         if row["type"] == "rwy_d":
-            rwy_dep_xy.append((row["x_pos"],row["y_pos"]))
+            rwy_dep_xy.append((row["x_pos"], row["y_pos"]))
         elif row["type"] == "rwy_a":
-            rwy_arr_xy.append((row["x_pos"],row["y_pos"]))
+            rwy_arr_xy.append((row["x_pos"], row["y_pos"]))
         elif row["type"] == "gate":
-            gates_xy.append((row["x_pos"],row["y_pos"]))
+            gates_xy.append((row["x_pos"], row["y_pos"]))
 
-    #Specify node ids of gates, departure runways and arrival runways in a dict
-    start_and_goal_locations = {"gates": gates_xy, 
-                                "dep_rwy": rwy_dep_xy,
-                                "arr_rwy": rwy_arr_xy}
+    # Specify node ids of gates, departure runways and arrival runways in a dict
+    start_and_goal_locations = {
+        "gates": gates_xy, 
+        "dep_rwy": rwy_dep_xy,
+        "arr_rwy": rwy_arr_xy
+    }
     
-    #Create edges_dict from df_edges
+    # Create edges_dict from df_edges
     edges_dict = {}
     for i, row in df_edges.iterrows():
-        edge_id = (row["from"],row["to"])
-        from_node =  edge_id[0]
+        edge_id = (row["from"], row["to"])
+        from_node = edge_id[0]
         to_node = edge_id[1]
         start_end_pos = (nodes_dict[from_node]["xy_pos"], nodes_dict[to_node]["xy_pos"])
-        edge_properties = {"id": edge_id,
-                           "from": row["from"],
-                           "to": row["to"],
-                           "length": row["length"],
-                           "weight": row["length"],
-                           "start_end_pos": start_end_pos
-                           }
+        edge_properties = {
+            "id": edge_id,
+            "from": row["from"],
+            "to": row["to"],
+            "length": row["length"],
+            "weight": row["length"],
+            "start_end_pos": start_end_pos
+        }
         edges_dict[edge_id] = edge_properties
    
-    #Add neighbor nodes to nodes_dict based on edges between nodes
+    # Add neighbor nodes to nodes_dict based on edges between nodes
     for edge in edges_dict:
         from_node = edge[0]
         to_node = edge[1]
@@ -115,7 +128,8 @@ def import_layout(nodes_file, edges_file):
     
     return nodes_dict, edges_dict, start_and_goal_locations
 
-def create_graph(nodes_dict, edges_dict, plot_graph = True):
+
+def create_graph(nodes_dict, edges_dict, plot_graph=True):
     """
     Creates networkX graph based on nodes and edges and plots 
     INPUT:
@@ -125,24 +139,27 @@ def create_graph(nodes_dict, edges_dict, plot_graph = True):
     RETURNS:
         - graph = networkX graph object
     """
+    graph = nx.DiGraph() # Create directed graph in NetworkX
     
-    graph = nx.DiGraph() #create directed graph in NetworkX
-    
-    #Add nodes and edges to networkX graph
+    # Add nodes and edges to networkX graph
     for node in nodes_dict.keys():
-        graph.add_node(node, 
-                       node_id = nodes_dict[node]["id"],
-                       xy_pos = nodes_dict[node]["xy_pos"],
-                       node_type = nodes_dict[node]["type"])
+        graph.add_node(
+            node, 
+            node_id=nodes_dict[node]["id"],
+            xy_pos=nodes_dict[node]["xy_pos"],
+            node_type=nodes_dict[node]["type"]
+        )
         
     for edge in edges_dict.keys():
-        graph.add_edge(edge[0], edge[1], 
-                       edge_id = edge,
-                       from_node =  edges_dict[edge]["from"],
-                       to_node = edges_dict[edge]["to"],
-                       weight = edges_dict[edge]["length"])
+        graph.add_edge(
+            edge[0], edge[1], 
+            edge_id=edge,
+            from_node=edges_dict[edge]["from"],
+            to_node=edges_dict[edge]["to"],
+            weight=edges_dict[edge]["length"]
+        )
     
-    #Plot networkX graph
+    # Plot networkX graph
     if plot_graph:
         plt.figure()
         node_locations = nx.get_node_attributes(graph, 'xy_pos')
@@ -151,10 +168,45 @@ def create_graph(nodes_dict, edges_dict, plot_graph = True):
     return graph
 
 
+def generate_flight_task(flight_id, t, gate_status):
+    """
+    Generates a new flight task (arrival or departure)
+    INPUT:
+        - flight_id: ID number for the flight
+        - t: Current simulation time
+        - gate_status: Dictionary tracking gate occupancy
+    RETURNS:
+        - FlightTask object or None if no task could be created
+    """
+    a_d = random.choice(["A", "D"])
+    if a_d == "A":
+        start_node = random.choice(ARRIVAL_RUNWAY_NODES)
+        available_gates = [gate for gate in GATE_NODES if gate not in gate_status]
+        if available_gates:
+            goal_node = random.choice(available_gates)
+            gate_status[goal_node] = {"release_time": t + GATE_HOLDING_TIME, "flight_id": flight_id}
+            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+GATE_HOLDING_TIME}")
+        else:
+            goal_node = "waiting"
+            print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
+    else:
+        ready_flights = [gate for gate, info in gate_status.items() if info["release_time"] <= t]
+        if not ready_flights:
+            return None
+        start_node = random.choice(ready_flights)
+        goal_node = random.choice(DEPARTURE_RUNWAY_NODES)
+        departing_flight_id = gate_status[start_node]["flight_id"]
+        del gate_status[start_node]
+        print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
+        return FlightTask(departing_flight_id, "D", start_node, goal_node, t)
+    return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
-#%% RUN SIMULATION
 
-def run_simulation(visualization_speed, task_interval, total_tugs, simulation_time):
+def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_INTERVAL, 
+                  total_tugs=TOTAL_TUGS, simulation_time=SIMULATION_TIME):
+    """
+    Main simulation function that runs the airport tug simulation
+    """
     # --- KPI Global Variables ---
     total_collisions = 0
     task_completion_times = []         # Execution time: from "moving_to_task"->"executing" to "executing"->"to_depot"
@@ -166,18 +218,20 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
     execution_start_times = {}         # Record time when a tug starts executing (moving_to_task -> executing)
     task_nodes = {}                    # List of nodes traversed during execution (for distance metric)
     prev_status = {}                   # Previous status for each tug
+    waiting_aircraft = []              # List for aircraft waiting for gates
     # ----------------------------------------------------------
 
-    nodes_dict, edges_dict, start_and_goal_locations = import_layout(nodes_file, edges_file)
-    graph = create_graph(nodes_dict, edges_dict, plot_graph)
+    # Initialize layout and graph
+    nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
+    graph = create_graph(nodes_dict, edges_dict, PLOT_GRAPH)
     heuristics = calc_heuristics(graph, nodes_dict)
 
     # Initialize list to track all tug agents
     tug_list = []
 
     # Initialize depots
-    departure_depot = Depot(1, position=112)
-    arrival_depot = Depot(2, position=113)
+    departure_depot = Depot(1, position=DEPARTURE_DEPOT_POSITION)
+    arrival_depot = Depot(2, position=ARRIVAL_DEPOT_POSITION)
 
     # Create tugs and add to corresponding depot queue
     for i in range(total_tugs):
@@ -194,41 +248,15 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
     # Initialize Auctioneer
     auctioneer = Auctioneer(tug_list)
 
-    # Flight task generator function
-    def generate_flight_task(flight_id, t):
-        a_d = random.choice(["A", "D"])
-        if a_d == "A":
-            start_node = random.choice([37, 38])
-            available_gates = [gate for gate in [97, 34, 35, 36, 98] if gate not in gate_status]
-            if available_gates:
-                goal_node = random.choice(available_gates)
-                gate_status[goal_node] = {"release_time": t + 10, "flight_id": flight_id}
-                print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+10}")
-            else:
-                goal_node = "waiting"
-                print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
-        else:
-            ready_flights = [gate for gate, info in gate_status.items() if info["release_time"] <= t]
-            if not ready_flights:
-                return None
-            start_node = random.choice(ready_flights)
-            goal_node = random.choice([1, 2])
-            departing_flight_id = gate_status[start_node]["flight_id"]
-            del gate_status[start_node]
-            print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
-            return FlightTask(departing_flight_id, "D", start_node, goal_node, t)
-        return FlightTask(flight_id, a_d, start_node, goal_node, t)
-
-    if visualization:
+    # Initialize visualization if enabled
+    if VISUALIZATION:
         map_properties = map_initialization(nodes_dict, edges_dict)
 
     running = True
     escape_pressed = False
     time_end = simulation_time
-    dt = 0.1
     t = 0
     task_counter = 0
-    delta_t = 0.5
     constraints = []
     gate_status = {}
 
@@ -239,25 +267,23 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
                 print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure.")
-                task = FlightTask(info["flight_id"], "D", gate, random.choice([1, 2]), t)
+                task = FlightTask(info["flight_id"], "D", gate, random.choice(DEPARTURE_RUNWAY_NODES), t)
                 if task:
                     departure_depot.add_task(task)
                     print(f"Time {t}: Departure task for Aircraft {info['flight_id']} created (from {gate} to runway).")
                 del gate_status[gate]
-                if "waiting_aircraft" in globals() and waiting_aircraft:
+                if waiting_aircraft:
                     next_aircraft = waiting_aircraft.pop(0)
-                    gate_status[gate] = {"release_time": t + 10, "flight_id": next_aircraft.flight_id}
+                    gate_status[gate] = {"release_time": t + GATE_HOLDING_TIME, "flight_id": next_aircraft.flight_id}
                     next_aircraft.goal_node = gate
                     print(f"Time {t}: Waiting aircraft {next_aircraft.flight_id} is now assigned to gate {gate}.")
 
         if abs(t - round(t)) < 1e-9 and (round(t) % task_interval == 0):
             task_counter += 1
             task_id = task_counter
-            task = generate_flight_task(task_id, t)
+            task = generate_flight_task(task_id, t, gate_status)
             if task:
                 if task.goal_node == "waiting":
-                    if "waiting_aircraft" not in globals():
-                        waiting_aircraft = []
                     waiting_aircraft.append(task)
                     print(f"Time {t}: Aircraft {task.flight_id} is waiting for a free gate.")
                 elif task.type == "A":
@@ -282,12 +308,14 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             for tug in tug_list:
                 print(f'Tug {tug.id} is charged at: {tug.bat_perc} %')
                 for task in departure_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
-                    #print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
+                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
+                                                           [departure_depot, arrival_depot], 
+                                                           gamma=GAMMA, alpha=ALPHA, beta=BETA)
                 
                 for task in arrival_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, [departure_depot,arrival_depot], gamma=1, alpha=1, beta=1)
-                    #print(f"Tug {tug.id}: price for task {task.flight_id} = {bidders_value_price}")
+                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
+                                                           [departure_depot, arrival_depot], 
+                                                           gamma=GAMMA, alpha=ALPHA, beta=BETA)
                 
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
                 if hasattr(tug, 'path_to_goal'):
@@ -307,9 +335,10 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                     "heading": tug.heading,
                     "has_flight": has_flight,
                     "status": tug.status,
-                    "bat_perc": tug.bat_perc  # Add battery percentage
+                    "bat_perc": tug.bat_perc  # Battery percentage
                 }
-        if visualization:
+        
+        if VISUALIZATION:
             escape_pressed = map_running(map_properties, current_states, t)
             timer.sleep(visualization_speed)
         
@@ -324,12 +353,12 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         tasks_available = departure_depot.tasks + arrival_depot.tasks
         if len(tasks_available) > 0:
             auctioneer.tug_availability(tug_list)
-            auctioneer.ask_price(tasks_available,nodes_dict,heuristics,t,[departure_depot,arrival_depot])
-            auctioneer.decision(departure_depot,arrival_depot)
+            auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
+            auctioneer.decision(departure_depot, arrival_depot)
 
         # Tugs Charging
-        departure_depot.charging(dt)
-        arrival_depot.charging(dt)
+        departure_depot.charging(DT)
+        arrival_depot.charging(DT)
 
         if t >= time_end or escape_pressed:
             running = False
@@ -338,27 +367,24 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             break
 
         # --- Run Planning ---
-        if planner == "Independent":
+        if PLANNER == "Independent":
             for tug in tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
                     run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
-        elif planner == "Prioritized":
+        elif PLANNER == "Prioritized":
             for tug in tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
-        elif planner == "CBS":
+                    constraints = run_prioritized_planner(tug_list, tug, nodes_dict, edges_dict, heuristics, t, DELTA_T, constraints)
+        elif PLANNER == "CBS":
             run_CBS()
         else:
-            raise Exception("Planner:", planner, "is not defined.")
+            raise Exception(f"Planner: {PLANNER} is not defined.")
 
         for tug in tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                tug.move(dt, t)
+                tug.move(DT, t)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
-        # We record two time metrics:
-        #   1. Execution Time (old KPI): from when a tug enters "executing" until it transitions to "to_depot".
-        #   2. Total Task Time (new KPI): from when a tug is assigned a task (idle -> moving_to_task) until it returns to "idle".
         for tug in tug_list:
             current_node = getattr(tug, 'current_node', tug.start)
             # Record total task start time when a tug is assigned a task:
@@ -394,7 +420,6 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             if prev_status[tug.id] == "to_depot" and tug.status == "idle":
                 if tug.id in total_task_start_times:
                     total_duration = t - total_task_start_times[tug.id]
-                    # Append to new KPI list for total task time.
                     total_task_completion_times.append(total_duration)
                     print(f"Tug {tug.id} completed total task in {total_duration} sec")
                     del total_task_start_times[tug.id]
@@ -415,22 +440,12 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
                         tug.set_init_tug_params(tug.id, "A", arrival_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the arrival depot.")
 
-
-        t = t + dt
+        t = t + DT
 
     # --- Compute Average KPI Values ---
-    if task_completion_times:
-        avg_execution_time = sum(task_completion_times) / len(task_completion_times)
-    else:
-        avg_execution_time = 0
-    if total_task_completion_times:
-        avg_total_time = sum(total_task_completion_times) / len(total_task_completion_times)
-    else:
-        avg_total_time = 0
-    if task_distances:
-        avg_distance = sum(task_distances) / len(task_distances)
-    else:
-        avg_distance = 0
+    avg_execution_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
+    avg_total_time = sum(total_task_completion_times) / len(total_task_completion_times) if total_task_completion_times else 0
+    avg_distance = sum(task_distances) / len(task_distances) if task_distances else 0
 
     print("\n----- KPI SUMMARY -----")
     print("Total collisions detected:", total_collisions)
@@ -440,18 +455,17 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
     print("Average task distance (in nodes traversed):", avg_distance)
     print("-----------------------")
 
-    return {"collisions": total_collisions,
-            "tasks_completed": total_tasks_completed,
-            "avg_execution_time": avg_execution_time,
-            "avg_total_time": avg_total_time,
-            "avg_distance": avg_distance}
+    return {
+        "collisions": total_collisions,
+        "tasks_completed": total_tasks_completed,
+        "avg_execution_time": avg_execution_time,
+        "avg_total_time": avg_total_time,
+        "avg_distance": avg_distance
+    }
 
 # To run the simulation standalone:
 if __name__ == "__main__":
-    visualization_speed = 0.001
-    total_tugs = 3
-    task_interval = 0.5
-    run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
+    run_simulation()
 
 
 # if __name__ == "__main__":
