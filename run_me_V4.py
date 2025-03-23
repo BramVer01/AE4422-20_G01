@@ -36,13 +36,13 @@ DT = 0.1  # Time step for movement
 # Visualization settings
 PLOT_GRAPH = False  # Show graph representation in NetworkX
 VISUALIZATION = True  # Enable pygame visualization
-VISUALIZATION_SPEED = 0.01  # Visualization update speed (seconds)
+VISUALIZATION_SPEED = 0.02  # Visualization update speed (seconds)
 
 # Task and tug settings
 TASK_INTERVAL = 1  # Generate a task every X seconds
-TOTAL_TUGS = 4  # Total number of tugs (split evenly between depots)
+TOTAL_TUGS = 3  # Total number of tugs (split evenly between depots)
 
-# Node IDs (previously hardcoded)
+# Node IDs 
 DEPARTURE_DEPOT_POSITION = 112
 ARRIVAL_DEPOT_POSITION = 113
 ARRIVAL_RUNWAY_NODES = [37, 38]
@@ -50,7 +50,7 @@ GATE_NODES = [97, 34, 35, 36, 98]
 DEPARTURE_RUNWAY_NODES = [1, 2]
 GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
-# Bidding parameters (previously hardcoded in print statements)
+# Bidding parameters Ye
 GAMMA = 1
 ALPHA = 1
 BETA = 1
