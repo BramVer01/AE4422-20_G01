@@ -203,8 +203,8 @@ def generate_flight_task(flight_id, t, gate_status):
     return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
 
-def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_INTERVAL, 
-                  total_tugs=TOTAL_TUGS, simulation_time=SIMULATION_TIME):
+def run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
+                  total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
     """
     Main simulation function that runs the airport tug simulation
     """
@@ -224,7 +224,7 @@ def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_I
 
     # Initialize layout and graph
     nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
-    graph = create_graph(nodes_dict, edges_dict, PLOT_GRAPH)
+    graph = create_graph(nodes_dict, edges_dict, plot_graph)
     heuristics = calc_heuristics(graph, nodes_dict)
 
     # Initialize list to track all tug agents
@@ -343,7 +343,7 @@ def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_I
                     "bat_perc": tug.bat_perc  # Battery percentage
                 }
         
-        if VISUALIZATION:
+        if visualization:
             escape_pressed = map_running(map_properties, current_states, t)
             timer.sleep(visualization_speed)
         
@@ -357,7 +357,7 @@ def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_I
         # Tasks Assignment
         tasks_available = departure_depot.tasks + arrival_depot.tasks
         if len(tasks_available) > 0:
-            auctioneer.tug_availability(tug_list)
+            auctioneer.tug_availability(atc.tug_list)
             auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
             auctioneer.decision(departure_depot, arrival_depot)
 
@@ -372,15 +372,15 @@ def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_I
             break
 
         # --- Run Planning ---
-        if planner == "Independent":
+        if PLANNER == "Independent":
             for tug in atc.tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
                     run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
-        elif planner == "Prioritized":
+        elif PLANNER == "Prioritized":
             for tug in atc.tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
                     atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, atc.constraints)
-        elif planner == "CBS":
+        elif PLANNER == "CBS":
             run_CBS()
         else:
             raise Exception(f"Planner: {PLANNER} is not defined.")
@@ -388,7 +388,7 @@ def run_simulation(visualization_speed=VISUALIZATION_SPEED, task_interval=TASK_I
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
-                tug.move(dt, t)
+                tug.move(DT, t)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
         # We record two time metrics:
