@@ -35,7 +35,7 @@ plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
 visualization_speed = 0.1 #set at 0.1 as default
 
-task_interval = 3    # New: generate a task every 5 seconds
+task_interval = 1    # New: generate a task every 5 seconds
 total_tugs = 10       # New: total number of tugs (will be split evenly between depots)
 
 
@@ -328,6 +328,7 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
 
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
                 tug.move(dt, t)
         
         # --- KPI: Detect Task Completion & Record Metrics ---

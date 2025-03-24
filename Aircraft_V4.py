@@ -81,6 +81,10 @@ class Tug(object):
         #Determine nodes between which the ac is moving
         from_node = self.from_to[0]
         to_node = self.from_to[1]
+        if from_node == 0 or to_node == 0 or not self.path_to_goal:
+            self.position = self.position
+            self.wait = True
+            return
         xy_from = self.nodes_dict[from_node]["xy_pos"] #xy position of from node
         xy_to = self.nodes_dict[to_node]["xy_pos"] #xy position of to node
         distance_to_move = self.speed*dt #distance to move in this timestep
@@ -108,7 +112,7 @@ class Tug(object):
         self.get_heading(xy_from, xy_to)	
 
         #Check if goal is reached or if to_node is reached
-        if self.position == xy_to and self.path_to_goal[0][1] == t+dt: #If with this move its current to node is reached
+        if self.position == xy_to and self.path_to_goal[0][1] == round(t+dt, 1): #If with this move its current to node is reached
             if self.position == self.nodes_dict[self.goal]["xy_pos"]: #if the final goal is reached
                 self.wait = True
                 if self.status == "moving_to_task":
