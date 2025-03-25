@@ -286,6 +286,8 @@ class Tug(object):
         self.current_task = task.flight_id
         self.goal = task.start_node
         self.final_goal = task.goal_node
+        if self.start != depot_node:
+            self.start = self.from_to[0]
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning
