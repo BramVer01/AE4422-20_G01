@@ -258,7 +258,6 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     time_end = simulation_time
     t = 0
     task_counter = 0
-    delta_t = 0.5
     gate_status = {}
 
     print("Simulation Started")
@@ -379,7 +378,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         elif PLANNER == "Prioritized":
             for tug in atc.tug_list:
                 if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, atc.constraints)
+                    atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, DELTA_T, atc.constraints)
         elif PLANNER == "CBS":
             run_CBS()
         else:

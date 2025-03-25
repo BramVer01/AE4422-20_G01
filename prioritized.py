@@ -16,6 +16,9 @@ def remove_constraints(constraints, param_key, param_value):
     return filtered_constraints
 
 def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t, delta_t, constraints):
+    if tug.start == 0 or tug.goal == 0:
+        tug.wait = True
+        return constraints
     constraining_tug = None
     tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
     if tug.wait:
