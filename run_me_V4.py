@@ -21,7 +21,6 @@ from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
 from Auctioneer_file import Auctioneer
 from ATC import ATC
-import numpy as np
 
 
 #%% SIMULATION PARAMETERS
@@ -39,10 +38,10 @@ DT = 0.1  # Time step for movement
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
-visualization_speed = 0.0001 #set at 0.1 as default
+visualization_speed = 0.1 #set at 0.1 as default
 
-task_interval = 1    # New: generate a task every 5 seconds
-total_tugs = 10       # New: total number of tugs (will be split evenly between depots)
+task_interval = 3    # New: generate a task every 5 seconds
+total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
 DEPARTURE_DEPOT_POSITION = 112.0
@@ -390,10 +389,12 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             else:
                 raise Exception(f"Planner: {PLANNER} is not defined.")
 
+        atc.constraints = [con for con in atc.constraints if con["timestep"] > t]
+        atc.constraints_at_t = [con for con in atc.constraints if con["timestep"] == round(t+DELTA_T, 1)]
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
-                tug.move(DT, t)
+                tug.move(DT, t, atc.constraints_at_t, DELTA_T)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
         # We record two time metrics:

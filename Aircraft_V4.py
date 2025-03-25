@@ -82,6 +82,24 @@ class Tug(object):
             if properties["xy_pos"] == self.position:
                 self.current_node = node_id
 
+    def is_node_constrained(self, node, constraints):
+        """
+        Checks if the current node at the current time is constrained.
+        
+        Parameters:
+            - current_node: The node ID to check.
+            - current_time: The current time to check.
+            - constraints: List of constraint dictionaries.
+        
+        Returns:
+            - True if the node is constrained at the given time, False otherwise.
+        """
+        for constraint in constraints:
+            if constraint['loc'] == [node] and constraint["constraining_tug"] != self:
+                print("Constrained")
+                return True
+        return False
+
     def get_heading(self, xy_start, xy_next):
         """
         Determines heading of a tug based on a start and end xy position.
@@ -112,7 +130,7 @@ class Tug(object):
     
         self.heading = heading
       
-    def move(self, dt, t):   
+    def move(self, dt, t, constraints, DELTA_T):   
         """
         Moves a tug between from_node and to_node and checks if to_node or goal is reached.
         
@@ -123,6 +141,10 @@ class Tug(object):
         # Determine nodes between which the tug is moving
         from_node = self.from_to[0]
         to_node = self.from_to[1]
+        if self.is_node_constrained(to_node, constraints):
+            self.wait = True
+            self.path_to_goal = []
+            return
         if from_node == 0 or to_node == 0 or not self.path_to_goal:
             self.position = self.position
             self.wait = True
