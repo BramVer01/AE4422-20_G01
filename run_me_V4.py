@@ -21,6 +21,7 @@ from Depot_file import Depot, FlightTask
 from Aircraft_V4 import Tug
 from Auctioneer_file import Auctioneer
 from ATC import ATC
+import numpy as np
 
 
 #%% SIMULATION PARAMETERS
@@ -44,11 +45,11 @@ task_interval = 1    # New: generate a task every 5 seconds
 total_tugs = 10       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
-DEPARTURE_DEPOT_POSITION = 112
-ARRIVAL_DEPOT_POSITION = 113
-ARRIVAL_RUNWAY_NODES = [37, 38]
-GATE_NODES = [97, 34, 35, 36, 98]
-DEPARTURE_RUNWAY_NODES = [1, 2]
+DEPARTURE_DEPOT_POSITION = 112.0
+ARRIVAL_DEPOT_POSITION = 113.0
+ARRIVAL_RUNWAY_NODES = [37.0, 38.0]
+GATE_NODES = [97.0, 34.0, 35.0, 36.0, 98.0]
+DEPARTURE_RUNWAY_NODES = [1.0, 2.0]
 GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
 # Bidding parameters Ye
@@ -264,6 +265,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     print("Simulation Started")
     while running:
         t = round(t, 2)
+        print(f"\n--- Time {t} ---")
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
@@ -356,7 +358,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
 
         # Tasks Assignment
         tasks_available = departure_depot.tasks + arrival_depot.tasks
-        if len(tasks_available) > 0:
+        if len(tasks_available) > 0 and (t/DELTA_T).is_integer():
             auctioneer.tug_availability(atc.tug_list)
             auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
             auctioneer.decision(departure_depot, arrival_depot)
@@ -370,20 +372,22 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             pg.quit()
             print("Simulation Stopped")
             break
-
+        
         # --- Run Planning ---
-        if PLANNER == "Independent":
-            for tug in atc.tug_list:
-                if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
-        elif PLANNER == "Prioritized":
-            for tug in atc.tug_list:
-                if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, DELTA_T, atc.constraints)
-        elif PLANNER == "CBS":
-            run_CBS()
-        else:
-            raise Exception(f"Planner: {PLANNER} is not defined.")
+        if (t/DELTA_T).is_integer():
+            print("Planning")
+            if PLANNER == "Independent":
+                for tug in atc.tug_list:
+                    if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                        run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
+            elif PLANNER == "Prioritized":
+                for tug in atc.tug_list:
+                    if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                        atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, DELTA_T, atc.constraints)
+            elif PLANNER == "CBS":
+                run_CBS()
+            else:
+                raise Exception(f"Planner: {PLANNER} is not defined.")
 
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:

@@ -57,6 +57,7 @@ class Tug(object):
         self.final_goal = None
         self.wait = None
         self.constraining_tug = None
+        self.from_time = None
         
         # Route related parameters
         self.status = 'idle'  # idle, moving_to_task, executing, to_depot
@@ -225,6 +226,17 @@ class Tug(object):
         if self.status in ["moving_to_task", "executing", "to_depot"] and not self.path_to_goal:
             start_node = self.start
             goal_node = self.goal
+            if self.start == self.goal:
+                if self.status == "moving_to_task":
+                    # Reached pickup location; now switch to executing.
+                    print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
+                    self.status = "executing"
+                    # Set new goal to aircraft's destination.
+                    self.start = self.goal
+                    self.goal = self.final_goal
+                    self.path_to_goal = []
+                    start_node = self.start
+                    goal_node = self.goal
             # Call the prioritized A* function with the extra parameters.
             success, path_agent = simple_single_agent_astar_prioritized(
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
@@ -254,7 +266,8 @@ class Tug(object):
             - bool: True if task can be assigned, False otherwise
         """
         # First check if the tug has enough battery to handle this task
-        depot_node = 112 if self.type == "D" else 113
+        depot_node = 112.0 if self.type == "D" else 113.0
+        start_nodes = [1.0, 2.0, 37.0, 38.0, 34.0, 35.0, 36.0, 97.0, 98.0, 112.0, 113.0]
 
         # Estimate the distances for the task: to task, to goal, and return to depot
         dist_to_task = np.sqrt(
@@ -286,8 +299,10 @@ class Tug(object):
         self.current_task = task.flight_id
         self.goal = task.start_node
         self.final_goal = task.goal_node
-        if self.start != depot_node:
+        print(self.from_to, self.start)
+        if (self.from_to[0] != 0) and (self.from_to[1] not in start_nodes):
             self.start = self.from_to[0]
+            print(self.from_to, self.start)
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning

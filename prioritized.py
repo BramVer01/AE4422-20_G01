@@ -36,11 +36,14 @@ def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t,
                     constraints.append(con)
                     con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': tug}
                     constraints.append(con)
+                if node == tug.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
+                    con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': tug}
+                    constraints.append(con)
+                    con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': tug}
+                    constraints.append(con)
+                    con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': tug}
+                    constraints.append(con)
                 previous_node = node
-                # if node == ac.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
-                #     for k in range(1, 50):
-                #         con = {'positive': False, 'agent': j.id, 'loc': [node], 'timestep': node[1]+k/2}
-                #         constraints.append(con)
     if constraining_tug is not None:
         constraining_tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
         for j in tug_lst:
@@ -53,6 +56,13 @@ def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t,
                         con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
                         constraints.append(con)
                         con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
+                        constraints.append(con)
+                    if node == constraining_tug.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
+                        con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': constraining_tug}
+                        constraints.append(con)
+                        con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': constraining_tug}
+                        constraints.append(con)
+                        con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1]+delta_t, 'constraining_tug': constraining_tug}
                         constraints.append(con)
                     previous_node = node
     return constraints
