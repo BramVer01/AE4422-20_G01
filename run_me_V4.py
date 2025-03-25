@@ -185,8 +185,9 @@ def generate_flight_task(flight_id, t, gate_status):
         available_gates = [gate for gate in GATE_NODES if gate not in gate_status]
         if available_gates:
             goal_node = random.choice(available_gates)
-            gate_status[goal_node] = {"release_time": t + GATE_HOLDING_TIME, "flight_id": flight_id}
-            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+GATE_HOLDING_TIME}")
+            release_time = t + GATE_HOLDING_TIME + random.choice([0, 0, 2, 4])
+            gate_status[goal_node] = {"release_time": release_time, "flight_id": flight_id}
+            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {release_time}")
         else:
             goal_node = "waiting"
             print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
