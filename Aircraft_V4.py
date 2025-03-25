@@ -67,6 +67,20 @@ class Tug(object):
         # State related parameters
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"]  # Initialize position to the start node's position
+        self.current_node = start_node
+
+    def get_node_by_xy(self):
+        """
+        Retrieves the node ID based on the given xy position.
+        INPUT:
+            - nodes_dict: Dictionary containing node properties
+            - xy_pos: Tuple (x_pos, y_pos) representing the position
+        RETURNS:
+            - node_id: The ID of the node with the matching xy position, or None if not found
+        """
+        for node_id, properties in self.nodes_dict.items():
+            if properties["xy_pos"] == self.position:
+                self.current_node = node_id
 
     def get_heading(self, xy_start, xy_next):
         """
@@ -253,7 +267,7 @@ class Tug(object):
                 self.constraining_tug = path_agent
                 path_agent.path_to_goal = []
                 path_agent.wait = True
-                path_agent.start = path_agent.from_to[0]
+                path_agent.start = path_agent.current_node
 
     def assign_task(self, task):
         """
@@ -299,10 +313,8 @@ class Tug(object):
         self.current_task = task.flight_id
         self.goal = task.start_node
         self.final_goal = task.goal_node
-        print(self.from_to, self.start)
-        if (self.from_to[0] != 0) and (self.from_to[1] not in start_nodes):
-            self.start = self.from_to[0]
-            print(self.from_to, self.start)
+        if self.current_node not in start_nodes:
+            self.start = self.current_node
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning

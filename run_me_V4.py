@@ -334,6 +334,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in atc.tug_list:
+            tug.get_node_by_xy()
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
                 current_states[tug.id] = {

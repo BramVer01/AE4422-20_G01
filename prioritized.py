@@ -27,48 +27,56 @@ def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t,
         tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
     for j in tug_lst:
         if j.id != tug.id:
-            previous_node = None
-            for node in tug.path_to_goal:
-                con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1], 'constraining_tug': tug}
+            if tug.wait:
+                con = {'positive': False, 'agent': j.id, 'loc': [tug.current_node], 'timestep': round(t+delta_t, 1), 'constraining_tug': tug}
                 constraints.append(con)
-                if previous_node is not None:
-                    con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constraining_tug': tug}
+            else:
+                previous_node = None
+                for node in tug.path_to_goal:
+                    con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1], 'constraining_tug': tug}
                     constraints.append(con)
-                    con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': tug}
-                    constraints.append(con)
-                    if node[0] == tug.goal:
-                        next_time = round(node[1]+delta_t, 1)
-                        con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': next_time, 'constraining_tug': tug}
+                    if previous_node is not None:
+                        con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constraining_tug': tug}
                         constraints.append(con)
-                        if previous_node is not None:
-                            con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': next_time, 'constraining_tug': tug}
+                        con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': tug}
+                        constraints.append(con)
+                        if node[0] == tug.goal:
+                            next_time = round(node[1]+delta_t, 1)
+                            con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': next_time, 'constraining_tug': tug}
                             constraints.append(con)
-                            con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': next_time, 'constraining_tug': tug}
-                            constraints.append(con)
-                previous_node = node
+                            if previous_node is not None:
+                                con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': next_time, 'constraining_tug': tug}
+                                constraints.append(con)
+                                con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': next_time, 'constraining_tug': tug}
+                                constraints.append(con)
+                    previous_node = node
     if constraining_tug is not None:
         constraining_tug.plan_prioritized(nodes_dict, edges_dict, heuristics, t, delta_t, constraints)
         for j in tug_lst:
             if j.id != constraining_tug.id:
-                previous_node = None
-                for node in constraining_tug.path_to_goal:
-                    con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
+                if constraining_tug.wait:
+                    con = {'positive': False, 'agent': j.id, 'loc': [constraining_tug.current_node], 'timestep': round(t+delta_t, 1), 'constraining_tug': constraining_tug}
                     constraints.append(con)
-                    if previous_node is not None:
-                        con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
-                        constraints.append(con)
-                        con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
-                        constraints.append(con)
-                    if node[0] == constraining_tug.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
-                        next_time = round(node[1]+delta_t, 1)
-                        con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                else:
+                    previous_node = None
+                    for node in constraining_tug.path_to_goal:
+                        con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
                         constraints.append(con)
                         if previous_node is not None:
-                            con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                            con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
                             constraints.append(con)
-                            con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                            con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
                             constraints.append(con)
-                    previous_node = node
+                        if node[0] == constraining_tug.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
+                            next_time = round(node[1]+delta_t, 1)
+                            con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                            constraints.append(con)
+                            if previous_node is not None:
+                                con = {'positive': False, 'agent': j.id, 'loc': [node[0], previous_node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                                constraints.append(con)
+                                con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
+                                constraints.append(con)
+                        previous_node = node
     return constraints
     #raise Exception("Prioritized planner not defined yet.")
     #return
