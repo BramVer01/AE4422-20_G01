@@ -38,7 +38,7 @@ DT = 0.1  # Time step for movement
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
-visualization_speed = 0.1 #set at 0.1 as default
+visualization_speed = 0.01 #set at 0.1 as default
 
 task_interval = 3    # New: generate a task every 5 seconds
 total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
