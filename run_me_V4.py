@@ -40,15 +40,15 @@ plot_graph = False    #show graph representation in NetworkX
 visualization = True        #pygame visualization
 visualization_speed = 0.1 #set at 0.1 as default
 
-task_interval = 1    # New: generate a task every 5 seconds
-total_tugs = 10       # New: total number of tugs (will be split evenly between depots)
+task_interval = 3    # New: generate a task every 5 seconds
+total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
-DEPARTURE_DEPOT_POSITION = 112
-ARRIVAL_DEPOT_POSITION = 113
-ARRIVAL_RUNWAY_NODES = [37, 38]
-GATE_NODES = [97, 34, 35, 36, 98]
-DEPARTURE_RUNWAY_NODES = [1, 2]
+DEPARTURE_DEPOT_POSITION = 112.0
+ARRIVAL_DEPOT_POSITION = 113.0
+ARRIVAL_RUNWAY_NODES = [37.0, 38.0]
+GATE_NODES = [97.0, 34.0, 35.0, 36.0, 98.0]
+DEPARTURE_RUNWAY_NODES = [1.0, 2.0]
 GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
 # Bidding parameters Ye
@@ -185,8 +185,9 @@ def generate_flight_task(flight_id, t, gate_status):
         available_gates = [gate for gate in GATE_NODES if gate not in gate_status]
         if available_gates:
             goal_node = random.choice(available_gates)
-            gate_status[goal_node] = {"release_time": t + GATE_HOLDING_TIME, "flight_id": flight_id}
-            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {t+GATE_HOLDING_TIME}")
+            release_time = t + GATE_HOLDING_TIME + random.choice([0, 0, 2, 4])
+            gate_status[goal_node] = {"release_time": release_time, "flight_id": flight_id}
+            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {release_time}")
         else:
             goal_node = "waiting"
             print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
@@ -258,12 +259,12 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     time_end = simulation_time
     t = 0
     task_counter = 0
-    delta_t = 0.5
     gate_status = {}
 
     print("Simulation Started")
     while running:
         t = round(t, 2)
+        print(f"\n--- Time {t} ---")
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
@@ -332,6 +333,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
         for tug in atc.tug_list:
+            tug.get_node_by_xy()
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 has_flight = hasattr(tug, 'current_task') and tug.current_task is not None
                 current_states[tug.id] = {
@@ -356,7 +358,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
 
         # Tasks Assignment
         tasks_available = departure_depot.tasks + arrival_depot.tasks
-        if len(tasks_available) > 0:
+        if len(tasks_available) > 0 and (t/DELTA_T).is_integer():
             auctioneer.tug_availability(atc.tug_list)
             auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
             auctioneer.decision(departure_depot, arrival_depot)
@@ -370,25 +372,29 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             pg.quit()
             print("Simulation Stopped")
             break
-
+        
         # --- Run Planning ---
-        if PLANNER == "Independent":
-            for tug in atc.tug_list:
-                if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
-        elif PLANNER == "Prioritized":
-            for tug in atc.tug_list:
-                if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                    atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, delta_t, atc.constraints)
-        elif PLANNER == "CBS":
-            run_CBS()
-        else:
-            raise Exception(f"Planner: {PLANNER} is not defined.")
+        if (t/DELTA_T).is_integer():
+            print("Planning")
+            if PLANNER == "Independent":
+                for tug in atc.tug_list:
+                    if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                        run_independent_planner(tug, nodes_dict, edges_dict, heuristics, t)
+            elif PLANNER == "Prioritized":
+                for tug in atc.tug_list:
+                    if tug.status in ["moving_to_task", "executing", "to_depot"]:
+                        atc.constraints = run_prioritized_planner(atc.tug_list, tug, nodes_dict, edges_dict, heuristics, t, DELTA_T, atc.constraints)
+            elif PLANNER == "CBS":
+                run_CBS()
+            else:
+                raise Exception(f"Planner: {PLANNER} is not defined.")
 
+        atc.constraints = [con for con in atc.constraints if con["timestep"] > t]
+        atc.constraints_at_t = [con for con in atc.constraints if con["timestep"] == round(t+DELTA_T, 1)]
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
-                tug.move(DT, t)
+                tug.move(DT, t, atc.constraints_at_t, DELTA_T)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
         # We record two time metrics:

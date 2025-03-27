@@ -57,6 +57,7 @@ class Tug(object):
         self.final_goal = None
         self.wait = None
         self.constraining_tug = None
+        self.from_time = None
         
         # Route related parameters
         self.status = 'idle'  # idle, moving_to_task, executing, to_depot
@@ -66,6 +67,38 @@ class Tug(object):
         # State related parameters
         self.heading = 0
         self.position = nodes_dict[start_node]["xy_pos"]  # Initialize position to the start node's position
+        self.current_node = start_node
+
+    def get_node_by_xy(self):
+        """
+        Retrieves the node ID based on the given xy position.
+        INPUT:
+            - nodes_dict: Dictionary containing node properties
+            - xy_pos: Tuple (x_pos, y_pos) representing the position
+        RETURNS:
+            - node_id: The ID of the node with the matching xy position, or None if not found
+        """
+        for node_id, properties in self.nodes_dict.items():
+            if properties["xy_pos"] == self.position:
+                self.current_node = node_id
+
+    def is_node_constrained(self, node, constraints):
+        """
+        Checks if the current node at the current time is constrained.
+        
+        Parameters:
+            - current_node: The node ID to check.
+            - current_time: The current time to check.
+            - constraints: List of constraint dictionaries.
+        
+        Returns:
+            - True if the node is constrained at the given time, False otherwise.
+        """
+        for constraint in constraints:
+            if constraint['loc'] == [node] and constraint["constraining_tug"] != self:
+                print("Constrained")
+                return True
+        return False
 
     def get_heading(self, xy_start, xy_next):
         """
@@ -97,7 +130,7 @@ class Tug(object):
     
         self.heading = heading
       
-    def move(self, dt, t):   
+    def move(self, dt, t, constraints, DELTA_T):   
         """
         Moves a tug between from_node and to_node and checks if to_node or goal is reached.
         
@@ -108,6 +141,10 @@ class Tug(object):
         # Determine nodes between which the tug is moving
         from_node = self.from_to[0]
         to_node = self.from_to[1]
+        if self.is_node_constrained(to_node, constraints):
+            self.wait = True
+            self.path_to_goal = []
+            return
         if from_node == 0 or to_node == 0 or not self.path_to_goal:
             self.position = self.position
             self.wait = True
@@ -225,6 +262,17 @@ class Tug(object):
         if self.status in ["moving_to_task", "executing", "to_depot"] and not self.path_to_goal:
             start_node = self.start
             goal_node = self.goal
+            if self.start == self.goal:
+                if self.status == "moving_to_task":
+                    # Reached pickup location; now switch to executing.
+                    print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
+                    self.status = "executing"
+                    # Set new goal to aircraft's destination.
+                    self.start = self.goal
+                    self.goal = self.final_goal
+                    self.path_to_goal = []
+                    start_node = self.start
+                    goal_node = self.goal
             # Call the prioritized A* function with the extra parameters.
             success, path_agent = simple_single_agent_astar_prioritized(
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
@@ -241,7 +289,7 @@ class Tug(object):
                 self.constraining_tug = path_agent
                 path_agent.path_to_goal = []
                 path_agent.wait = True
-                path_agent.start = path_agent.from_to[0]
+                path_agent.start = path_agent.current_node
 
     def assign_task(self, task):
         """
@@ -254,7 +302,8 @@ class Tug(object):
             - bool: True if task can be assigned, False otherwise
         """
         # First check if the tug has enough battery to handle this task
-        depot_node = 112 if self.type == "D" else 113
+        depot_node = 112.0 if self.type == "D" else 113.0
+        start_nodes = [1.0, 2.0, 37.0, 38.0, 34.0, 35.0, 36.0, 97.0, 98.0, 112.0, 113.0]
 
         # Estimate the distances for the task: to task, to goal, and return to depot
         dist_to_task = np.sqrt(
@@ -286,6 +335,8 @@ class Tug(object):
         self.current_task = task.flight_id
         self.goal = task.start_node
         self.final_goal = task.goal_node
+        if self.current_node not in start_nodes:
+            self.start = self.current_node
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning
