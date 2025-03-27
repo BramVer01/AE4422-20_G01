@@ -186,7 +186,7 @@ class Tug(object):
                 self.wait = True
                 if self.status == "moving_to_task":
                     # Reached pickup location; now switch to executing.
-                    print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
+                    # print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
                     self.status = "executing"
                     # Set new goal to aircraft's destination.
                     self.start = self.goal
@@ -194,7 +194,7 @@ class Tug(object):
                     self.path_to_goal = []
                 elif self.status == "executing":
                     # Reached the aircraft's destination.
-                    print(f"Tug {self.id} delivered task. Switching status to to_depot.")
+                    # print(f"Tug {self.id} delivered task. Switching status to to_depot.")
                     self.status = "to_depot"
                     depot_node = 112 if self.type == "D" else 113
                     self.start = self.goal
@@ -202,7 +202,7 @@ class Tug(object):
                     self.path_to_goal = []
                 elif self.status == "to_depot":
                     # Reached the depot.
-                    print(f"Tug {self.id} returned to depot at node {to_node}. Setting status to idle.")
+                    # print(f"Tug {self.id} returned to depot at node {to_node}. Setting status to idle.")
                     self.status = "idle"
                     self.coupled = to_node
                     self.current_task = None
@@ -238,7 +238,7 @@ class Tug(object):
                 self.path_to_goal = path[1:]
                 next_node_id = self.path_to_goal[0][0]  # next node is first node in path_to_goal
                 self.from_to = [path[0][0], next_node_id]
-                print("Path tug", self.id, ":", path)
+                # print("Path tug", self.id, ":", path)
             else:
                 raise Exception("No solution found for", self.id)
             
@@ -265,7 +265,7 @@ class Tug(object):
             if self.start == self.goal:
                 if self.status == "moving_to_task":
                     # Reached pickup location; now switch to executing.
-                    print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
+                    # print(f"Tug {self.id} reached pickup location {self.goal}. Switching status to executing.")
                     self.status = "executing"
                     # Set new goal to aircraft's destination.
                     self.start = self.goal
@@ -282,9 +282,9 @@ class Tug(object):
                 next_node_id = self.path_to_goal[0][0]
                 self.from_to = [path_agent[0][0], next_node_id]
                 self.wait = False
-                print("Path (prioritized) for tug", self.id, ":", path_agent)
+                # print("Path (prioritized) for tug", self.id, ":", path_agent)
             else:
-                print("No solution found for tug", self.id, "start to switch priority")
+                # print("No solution found for tug", self.id, "start to switch priority")
                 self.wait = True
                 self.constraining_tug = path_agent
                 path_agent.path_to_goal = []
@@ -331,7 +331,7 @@ class Tug(object):
         if self.bat_state < required_battery:
             return False
 
-        print(f"Assigning task {task.flight_id} to tug {self.id}. Current status: {self.status}")
+        # print(f"Assigning task {task.flight_id} to tug {self.id}. Current status: {self.status}")
         self.current_task = task.flight_id
         self.goal = task.start_node
         self.final_goal = task.goal_node
@@ -340,7 +340,7 @@ class Tug(object):
         self.status = "moving_to_task"
         self.wait = True
         self.path_to_goal = []  # Reset path_to_goal to force replanning
-        print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
+        # print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
         return True
 
     def set_init_tug_params(self, tug_id, a_d, start_node, nodes_dict):

@@ -37,8 +37,8 @@ DT = 0.1  # Time step for movement
 
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
-visualization = True        #pygame visualization
-visualization_speed = 0.01 #set at 0.1 as default
+visualization = False        #pygame visualization
+visualization_speed = 0.001 #set at 0.1 as default
 
 task_interval = 3    # New: generate a task every 5 seconds
 total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
@@ -187,10 +187,10 @@ def generate_flight_task(flight_id, t, gate_status):
             goal_node = random.choice(available_gates)
             release_time = t + GATE_HOLDING_TIME + random.choice([0, 0, 2, 4])
             gate_status[goal_node] = {"release_time": release_time, "flight_id": flight_id}
-            print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {release_time}")
+            # print(f"Time {t}: Aircraft {flight_id} arriving at gate {goal_node}, scheduled to depart at {release_time}")
         else:
             goal_node = "waiting"
-            print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
+            # print(f"Time {t}: Aircraft {flight_id} is waiting for a free gate.")
     else:
         ready_flights = [gate for gate, info in gate_status.items() if info["release_time"] <= t]
         if not ready_flights:
@@ -199,13 +199,13 @@ def generate_flight_task(flight_id, t, gate_status):
         goal_node = random.choice(DEPARTURE_RUNWAY_NODES)
         departing_flight_id = gate_status[start_node]["flight_id"]
         del gate_status[start_node]
-        print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
+        # print(f"Time {t}: Aircraft {departing_flight_id} departing from gate {start_node} to runway {goal_node}")
         return FlightTask(departing_flight_id, "D", start_node, goal_node, t)
     return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
 
 def run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
-                  total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
+                   total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
     """
     Main simulation function that runs the airport tug simulation
     """
@@ -261,10 +261,11 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     task_counter = 0
     gate_status = {}
 
-    print("Simulation Started")
+    # print("Simulation Started")
+    cpu_start = time.process_time()  # --- CPU Runtime KPI Start ---
     while running:
         t = round(t, 2)
-        print(f"\n--- Time {t} ---")
+        # print(f"\n--- Time {t} ---")
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
@@ -272,17 +273,17 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     delay = t - info["arrival_time"] - 10
                 else:
                     delay = "UNKNOWN"  # This prevents errors if no waiting time is found
-                print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure. It had a delay of {delay} seconds.")
+                # print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure. It had a delay of {delay} seconds.")
                 task = FlightTask(info["flight_id"], "D", gate, random.choice(DEPARTURE_RUNWAY_NODES), t)
                 if task:
                     departure_depot.add_task(task)
-                    print(f"Time {t}: Departure task for Aircraft {info['flight_id']} created (from {gate} to runway).")
+                    # print(f"Time {t}: Departure task for Aircraft {info['flight_id']} created (from {gate} to runway).")
                 del gate_status[gate]
                 if waiting_aircraft:
                     next_aircraft = waiting_aircraft.pop(0)
                     gate_status[gate] = {"release_time": t + GATE_HOLDING_TIME, "flight_id": next_aircraft.flight_id}
                     next_aircraft.goal_node = gate
-                    print(f"Time {t}: Waiting aircraft {next_aircraft.flight_id} is now assigned to gate {gate}.")
+                    # print(f"Time {t}: Waiting aircraft {next_aircraft.flight_id} is now assigned to gate {gate}.")
 
         if abs(t - round(t)) < 1e-9 and (round(t) % task_interval == 0):
             task_counter += 1
@@ -291,44 +292,44 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             if task:
                 if task.goal_node == "waiting":
                     waiting_aircraft.append(task)
-                    print(f"Time {t}: Aircraft {task.flight_id} is waiting for a free gate.")
+                    # print(f"Time {t}: Aircraft {task.flight_id} is waiting for a free gate.")
                 elif task.type == "A":
                     arrival_depot.add_task(task)
-                    print(f"Time {t}: New arrival task {task.flight_id} added to arrival depot (from {task.start_node} to {task.goal_node})")
+                    # print(f"Time {t}: New arrival task {task.flight_id} added to arrival depot (from {task.start_node} to {task.goal_node})")
                 else:
                     departure_depot.add_task(task)
-                    print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
+                    # print(f"Time {t}: New departure task {task.flight_id} added to departure depot (from {task.start_node} to {task.goal_node})")
         
         # --- Print Status Every 10 Seconds ---
-        if t == 0 or (t % 10 == 0):
-            dep_tugs_ids = [tug.id for tug in departure_depot.tugs]
-            dep_tasks_ids = [task.flight_id for task in departure_depot.tasks]
-            arr_tugs_ids = [tug.id for tug in arrival_depot.tugs]
-            arr_tasks_ids = [task.flight_id for task in arrival_depot.tasks]
-            print(f"\n--- Time {t} Depot Queues ---")
-            print("Departure Depot Tugs:", dep_tugs_ids)
-            print("Departure Depot Tasks:", dep_tasks_ids)
-            print("Arrival Depot Tugs:", arr_tugs_ids)
-            print("Arrival Depot Tasks:", arr_tasks_ids)
-            print("-------------------------------\n")
-            for tug in atc.tug_list:
-                print(f'Tug {tug.id} is charged at: {tug.bat_perc} %')
-                for task in departure_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
-                                                           [departure_depot, arrival_depot], 
-                                                           gamma=GAMMA, alpha=ALPHA, beta=BETA)
+        # if t == 0 or (t % 10 == 0):
+        #     dep_tugs_ids = [tug.id for tug in departure_depot.tugs]
+        #     dep_tasks_ids = [task.flight_id for task in departure_depot.tasks]
+        #     arr_tugs_ids = [tug.id for tug in arrival_depot.tugs]
+        #     arr_tasks_ids = [task.flight_id for task in arrival_depot.tasks]
+        #     print(f"\n--- Time {t} Depot Queues ---")
+        #     print("Departure Depot Tugs:", dep_tugs_ids)
+        #     print("Departure Depot Tasks:", dep_tasks_ids)
+        #     print("Arrival Depot Tugs:", arr_tugs_ids)
+        #     print("Arrival Depot Tasks:", arr_tasks_ids)
+        #     print("-------------------------------\n")
+        #     for tug in atc.tug_list:
+        #         print(f'Tug {tug.id} is charged at: {tug.bat_perc} %')
+        #         for task in departure_depot.tasks:
+        #             bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
+        #                                                     [departure_depot, arrival_depot], 
+        #                                                     gamma=GAMMA, alpha=ALPHA, beta=BETA)
                 
-                for task in arrival_depot.tasks:
-                    bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
-                                                           [departure_depot, arrival_depot], 
-                                                           gamma=GAMMA, alpha=ALPHA, beta=BETA)
+        #         for task in arrival_depot.tasks:
+        #             bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
+        #                                                     [departure_depot, arrival_depot], 
+        #                                                     gamma=GAMMA, alpha=ALPHA, beta=BETA)
                 
-                print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
-                if hasattr(tug, 'path_to_goal'):
-                    print(f"  Current path: {tug.path_to_goal}")
-                    print(f"  Current goal: {tug.goal}")
-                else:
-                    print("  Current path: None")
+        #         print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
+        #         if hasattr(tug, 'path_to_goal'):
+        #             print(f"  Current path: {tug.path_to_goal}")
+        #             print(f"  Current goal: {tug.goal}")
+        #         else:
+        #             print("  Current path: None")
         
         # --- Collision Detection KPI (always computed) ---
         current_states = {}
@@ -375,7 +376,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         
         # --- Run Planning ---
         if (t/DELTA_T).is_integer():
-            print("Planning")
+            # print("Planning")
             if PLANNER == "Independent":
                 for tug in atc.tug_list:
                     if tug.status in ["moving_to_task", "executing", "to_depot"]:
@@ -436,7 +437,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 if tug.id in total_task_start_times:
                     total_duration = t - total_task_start_times[tug.id]
                     total_task_completion_times.append(total_duration)
-                    print(f"Tug {tug.id} completed total task in {total_duration} sec")
+                    # print(f"Tug {tug.id} completed total task in {total_duration} sec")
                     del total_task_start_times[tug.id]
 
             prev_status[tug.id] = tug.status
@@ -448,14 +449,17 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     if tug not in departure_depot.tugs:
                         departure_depot.tugs.append(tug)
                         tug.set_init_tug_params(tug.id, "D", departure_depot.position, nodes_dict)
-                        print(f"Tug {tug.id} has returned to the departure depot.")
+                        # print(f"Tug {tug.id} has returned to the departure depot.")
                 elif tug.type == "A" and tug.coupled == arrival_depot.position:
                     if tug not in arrival_depot.tugs:
                         arrival_depot.tugs.append(tug)
                         tug.set_init_tug_params(tug.id, "A", arrival_depot.position, nodes_dict)
-                        print(f"Tug {tug.id} has returned to the arrival depot.")
+                        # print(f"Tug {tug.id} has returned to the arrival depot.")
 
         t = t + DT
+
+    cpu_end = time.process_time()  # --- CPU Runtime KPI End ---
+    cpu_runtime = cpu_end - cpu_start
 
     # --- Compute Average KPI Values ---
     avg_execution_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
@@ -468,6 +472,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     print("Average execution time (old KPI):", avg_execution_time)
     print("Average total task time (new KPI):", avg_total_time)
     print("Average task distance (in nodes traversed):", avg_distance)
+    print("CPU runtime (seconds):", cpu_runtime)
     print("-----------------------")
 
     return {
@@ -475,12 +480,77 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         "tasks_completed": total_tasks_completed,
         "avg_execution_time": avg_execution_time,
         "avg_total_time": avg_total_time,
-        "avg_distance": avg_distance
+        "avg_distance": avg_distance,
+        "cpu_runtime": cpu_runtime
     }
 
-# To run the simulation standalone:
+# # To run the simulation standalone:
+# if __name__ == "__main__":
+#     run_simulation()
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import normaltest, norm
+
+def test_normality(data, name, alpha=0.05):
+    stat, p = normaltest(data)
+    print(f"{name}: stat={stat:.4f}, p={p:.4f}")
+    if p < alpha:
+        print(f"Result: {name} data is not normally distributed (reject H0).")
+    else:
+        print(f"Result: {name} data appears normally distributed (fail to reject H0).")
+    print("-----")
+
+def plot_distribution(data, name):
+    plt.figure()
+    # Plot histogram with density normalization
+    plt.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
+    mu, std = np.mean(data), np.std(data)
+    xmin, xmax = plt.xlim()
+    x = np.linspace(xmin, xmax, 100)
+    p = norm.pdf(x, mu, std)
+    plt.plot(x, p, 'k', linewidth=2)
+    plt.title(f"{name} Distribution\nMean: {mu:.2f}, Std: {std:.2f}")
+    plt.xlabel(name)
+    plt.ylabel("Probability Density")
+    plt.grid(True)
+    plt.show()
+
+'''Testing normality of KPIs'''
 if __name__ == "__main__":
-    run_simulation()
+    num_runs = 100  # Adjust the number of simulation runs as needed
+    collisions_list = []
+    tasks_completed_list = []
+    avg_execution_time_list = []
+    avg_total_time_list = []
+    avg_distance_list = []
+    cpu_runtime_list = []
+
+    for i in range(num_runs):
+        print(f"\n--- Simulation run {i+1}/{num_runs} ---")
+        kpi_results = run_simulation()  # Assumes run_simulation is defined and uses global defaults
+        collisions_list.append(kpi_results["collisions"])
+        tasks_completed_list.append(kpi_results["tasks_completed"])
+        avg_execution_time_list.append(kpi_results["avg_execution_time"])
+        avg_total_time_list.append(kpi_results["avg_total_time"])
+        avg_distance_list.append(kpi_results["avg_distance"])
+        cpu_runtime_list.append(kpi_results["cpu_runtime"])
+
+    print("\n=== Normality Test Results for KPIs ===")
+    test_normality(collisions_list, "Collisions")
+    test_normality(tasks_completed_list, "Tasks Completed")
+    test_normality(avg_execution_time_list, "Average Execution Time")
+    test_normality(avg_total_time_list, "Average Total Task Time")
+    test_normality(avg_distance_list, "Average Task Distance")
+    test_normality(cpu_runtime_list, "CPU Runtime")
+
+    print("\n=== Plotting KPI Distributions ===")
+    plot_distribution(collisions_list, "Collisions")
+    plot_distribution(tasks_completed_list, "Tasks Completed")
+    plot_distribution(avg_execution_time_list, "Average Execution Time")
+    plot_distribution(avg_total_time_list, "Average Total Task Time")
+    plot_distribution(avg_distance_list, "Average Task Distance")
+    plot_distribution(cpu_runtime_list, "CPU Runtime")
 
 
 # if __name__ == "__main__":
