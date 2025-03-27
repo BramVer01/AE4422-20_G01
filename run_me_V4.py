@@ -41,7 +41,7 @@ visualization = False        #pygame visualization
 visualization_speed = 0.001 #set at 0.1 as default
 
 task_interval = 3    # New: generate a task every 5 seconds
-total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
+total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
 DEPARTURE_DEPOT_POSITION = 112.0
@@ -518,39 +518,54 @@ def plot_distribution(data, name):
 
 '''Testing normality of KPIs'''
 if __name__ == "__main__":
-    num_runs = 100  # Adjust the number of simulation runs as needed
+    num_runs = 30  # Adjust the number of simulation runs as needed
     collisions_list = []
     tasks_completed_list = []
     avg_execution_time_list = []
     avg_total_time_list = []
     avg_distance_list = []
     cpu_runtime_list = []
+    error_count = 0
 
     for i in range(num_runs):
         print(f"\n--- Simulation run {i+1}/{num_runs} ---")
-        kpi_results = run_simulation()  # Assumes run_simulation is defined and uses global defaults
-        collisions_list.append(kpi_results["collisions"])
-        tasks_completed_list.append(kpi_results["tasks_completed"])
-        avg_execution_time_list.append(kpi_results["avg_execution_time"])
-        avg_total_time_list.append(kpi_results["avg_total_time"])
-        avg_distance_list.append(kpi_results["avg_distance"])
-        cpu_runtime_list.append(kpi_results["cpu_runtime"])
+        try:
+            kpi_results = run_simulation()  # Assumes run_simulation is defined and uses global defaults
+            collisions_list.append(kpi_results["collisions"])
+            tasks_completed_list.append(kpi_results["tasks_completed"])
+            avg_execution_time_list.append(kpi_results["avg_execution_time"])
+            avg_total_time_list.append(kpi_results["avg_total_time"])
+            avg_distance_list.append(kpi_results["avg_distance"])
+            cpu_runtime_list.append(kpi_results["cpu_runtime"])
+        except Exception as e:
+            error_count += 1
+            print(f"Error in simulation run {i+1}: {e}")
+            # Continue with next simulation run
 
-    print("\n=== Normality Test Results for KPIs ===")
-    test_normality(collisions_list, "Collisions")
-    test_normality(tasks_completed_list, "Tasks Completed")
-    test_normality(avg_execution_time_list, "Average Execution Time")
-    test_normality(avg_total_time_list, "Average Total Task Time")
-    test_normality(avg_distance_list, "Average Task Distance")
-    test_normality(cpu_runtime_list, "CPU Runtime")
+    error_rate = error_count / num_runs
+    print("\n=== Overall Error Rate ===")
+    print(f"Error Rate: {error_rate*100:.2f}% ({error_count}/{num_runs} runs encountered errors)")
+    print("-----")
 
-    print("\n=== Plotting KPI Distributions ===")
-    plot_distribution(collisions_list, "Collisions")
-    plot_distribution(tasks_completed_list, "Tasks Completed")
-    plot_distribution(avg_execution_time_list, "Average Execution Time")
-    plot_distribution(avg_total_time_list, "Average Total Task Time")
-    plot_distribution(avg_distance_list, "Average Task Distance")
-    plot_distribution(cpu_runtime_list, "CPU Runtime")
+    # Only perform tests and plots if we have at least one successful run
+    if collisions_list:
+        print("\n=== Normality Test Results for KPIs ===")
+        test_normality(collisions_list, "Collisions")
+        test_normality(tasks_completed_list, "Tasks Completed")
+        test_normality(avg_execution_time_list, "Average Execution Time")
+        test_normality(avg_total_time_list, "Average Total Task Time")
+        test_normality(avg_distance_list, "Average Task Distance")
+        test_normality(cpu_runtime_list, "CPU Runtime")
+
+        print("\n=== Plotting KPI Distributions ===")
+        plot_distribution(collisions_list, "Collisions")
+        plot_distribution(tasks_completed_list, "Tasks Completed")
+        plot_distribution(avg_execution_time_list, "Average Execution Time")
+        plot_distribution(avg_total_time_list, "Average Total Task Time")
+        plot_distribution(avg_distance_list, "Average Task Distance")
+        plot_distribution(cpu_runtime_list, "CPU Runtime")
+    else:
+        print("No successful simulation runs to analyze KPIs.")
 
 
 # if __name__ == "__main__":
