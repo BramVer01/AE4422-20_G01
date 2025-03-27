@@ -514,11 +514,12 @@ def plot_distribution(data, name):
     plt.xlabel(name)
     plt.ylabel("Probability Density")
     plt.grid(True)
+    # plt.savefig(f'figure_normal_dis_{name}')
     plt.show()
 
 '''Testing normality of KPIs'''
 if __name__ == "__main__":
-    num_runs = 30  # Adjust the number of simulation runs as needed
+    num_runs = 100  # Adjust the number of simulation runs as needed
     collisions_list = []
     tasks_completed_list = []
     avg_execution_time_list = []
