@@ -151,7 +151,6 @@ class Tug(object):
             return
         speed = self.speed
         from_to = (float(self.from_to[0]), float(self.from_to[1]))
-        print(from_to)
         if LFPG_LAYOUT and from_to in [(42.0, 94.0), (94.0, 42.0), (43.0, 95.0), (95.0, 43.0)]:
             print("Reducing speed")
             speed = 0.5*self.speed
