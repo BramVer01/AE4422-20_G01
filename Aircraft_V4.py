@@ -130,7 +130,7 @@ class Tug(object):
     
         self.heading = heading
       
-    def move(self, dt, t, constraints, DELTA_T):   
+    def move(self, dt, t, constraints, LFPG_LAYOUT, dep_depot, arr_depot):   
         """
         Moves a tug between from_node and to_node and checks if to_node or goal is reached.
         
@@ -149,9 +149,15 @@ class Tug(object):
             self.position = self.position
             self.wait = True
             return
+        speed = self.speed
+        from_to = (float(self.from_to[0]), float(self.from_to[1]))
+        print(from_to)
+        if LFPG_LAYOUT and from_to in [(42.0, 94.0), (94.0, 42.0), (43.0, 95.0), (95.0, 43.0)]:
+            print("Reducing speed")
+            speed = 0.5*self.speed
         xy_from = self.nodes_dict[from_node]["xy_pos"] #xy position of from node
         xy_to = self.nodes_dict[to_node]["xy_pos"] #xy position of to node
-        distance_to_move = self.speed*dt #distance to move in this timestep
+        distance_to_move = speed*dt #distance to move in this timestep
   
         # Update position with rounded values
         if xy_from == xy_to or self.wait:
@@ -196,7 +202,8 @@ class Tug(object):
                     # Reached the aircraft's destination.
                     print(f"Tug {self.id} delivered task. Switching status to to_depot.")
                     self.status = "to_depot"
-                    depot_node = 112 if self.type == "D" else 113
+                    depot_node = dep_depot.position if self.type == "D" else arr_depot.position
+                    print(depot_node)
                     self.start = self.goal
                     self.goal = depot_node
                     self.path_to_goal = []
@@ -291,7 +298,7 @@ class Tug(object):
                 path_agent.wait = True
                 path_agent.start = path_agent.current_node
 
-    def assign_task(self, task):
+    def assign_task(self, task, dep_depot, arr_depot, START_NODES):
         """
         Assign a flight task to this tug.
         
@@ -302,8 +309,10 @@ class Tug(object):
             - bool: True if task can be assigned, False otherwise
         """
         # First check if the tug has enough battery to handle this task
-        depot_node = 112.0 if self.type == "D" else 113.0
-        start_nodes = [1.0, 2.0, 37.0, 38.0, 34.0, 35.0, 36.0, 97.0, 98.0, 112.0, 113.0]
+        
+        depot_node = dep_depot.position if self.type == "D" else arr_depot.position
+        print(depot_node)
+        start_nodes = START_NODES
 
         # Estimate the distances for the task: to task, to goal, and return to depot
         dist_to_task = np.sqrt(
