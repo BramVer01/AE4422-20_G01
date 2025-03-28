@@ -362,7 +362,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 }
         
         if visualization:
-            escape_pressed = map_running(map_properties, current_states, t)
+            escape_pressed = map_running(map_properties, current_states, t, departure_depot, arrival_depot, nodes_dict)
             timer.sleep(visualization_speed)
         
         for id1 in current_states:

@@ -257,7 +257,7 @@ def map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_r
 
 #%% Update map during running
 
-def map_running(map_properties, current_states, t):  # function to update the map
+def map_running(map_properties, current_states, t, departure_depot, arrival_depot, nodes_dict):  # function to update the map
     """
     Function updates Pygame map based on the map_properties, current state of the vehicles and the time.
     Collissions are detected if two aircraft are at the same xy_position. HINT: Is a collision the only conflict?    
@@ -349,7 +349,7 @@ def map_running(map_properties, current_states, t):  # function to update the ma
     for tug1 in current_states:
         for tug2 in current_states:
             if tug1 != tug2 and current_states[tug1]["xy_pos"] == current_states[tug2]["xy_pos"]:
-                if current_states[tug1]["xy_pos"] not in [(4.0, 8.0), (7.0, 7.0)]:  # Skip collisions at the depot and at (7.0, 7.0)
+                if current_states[tug1]["xy_pos"] not in [nodes_dict[departure_depot.position]["xy_pos"], nodes_dict[arrival_depot.position]["xy_pos"]]:  # Skip collisions at the depot and at (7.0, 7.0) 
                     collision = True
                     print("COLLISION - between", current_states[tug1]["tug_id"], "and", current_states[tug2]["tug_id"],
                         "at location", current_states[tug1]["xy_pos"], "time", time)
