@@ -90,7 +90,7 @@ def plot_text(scr, text_str, color_code, fontsize, reso, x, y, x0, y0, x_range, 
     textpos.centery = wp_map_y  # determine y-location of text string
     scr.blit(text, textpos)
 
-def map_initialization(nodes_dict, edges_dict):  # function to initialise mapf
+def map_initialization(nodes_dict, edges_dict, LFPG_LAYOUT):  # function to initialise mapf
     #print(edges_dict)
 
     map_properties = dict()  # create dict to return all properties
@@ -147,7 +147,7 @@ def map_initialization(nodes_dict, edges_dict):  # function to initialise mapf
     map_properties['tug_rectlist'] = tug_rectlist  # tug surface
     map_properties['horizontal_sep'] = horizontal_sep  # margin around screen
 
-    map_get_background(map_properties, nodes_dict, edges_dict)  # create the background layout
+    map_get_background(map_properties, nodes_dict, edges_dict, LFPG_LAYOUT)  # create the background layout
 
     return map_properties  # return all information
 
@@ -208,7 +208,7 @@ def map_get_range(nodes_dict, map_properties):
     map_properties['y_range'] = y_range
 
 
-def map_get_background(map_properties, nodes_dict, edges_dict):
+def map_get_background(map_properties, nodes_dict, edges_dict, LFPG_LAYOUT):
     reso = map_properties['inner_reso']  # get resolution
     scr = map_properties['scr']  # get screen
 
@@ -217,13 +217,13 @@ def map_get_background(map_properties, nodes_dict, edges_dict):
     max_y = map_properties['max_y'] # get y0 (measured from above)
     y_range = map_properties['y_range']  # get vertical range
 
-    map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_range, 0, 0)
+    map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_range, 0, 0, LFPG_LAYOUT)
 
     background = pg.image.tostring(scr, "RGB")  # transform image to string (faster reading during simulation
     map_properties['background'] = background  # store background
 
 
-def map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_range, scr_x_shift, scr_y_shift): 
+def map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_range, scr_x_shift, scr_y_shift, LFPG_LAYOUT): 
     #Print edges on map
     edges_created = set()
     for edge in edges_dict:
@@ -236,9 +236,13 @@ def map_get_layout(scr, nodes_dict, edges_dict, min_x, max_y, reso, x_range, y_r
         else:
             pass
 
-    #Print runways on map   
-    runway_a = [(3, 2.5), (3, 6.5)]
-    runway_d = [(1, 3.5), (1, 7.5)]
+    #Print runways on map
+    if LFPG_LAYOUT:
+        runway_a = [(2, -1.5), (11, -1.5)]
+        runway_d = [(0, -0.5), (12.5, -0.5)]
+    else:
+        runway_a = [(3, 2.5), (3, 6.5)]
+        runway_d = [(1, 3.5), (1, 7.5)]
     plot_line(scr, darkgreen, reso, 5, runway_a[0], runway_a[1], min_x, max_y, x_range, y_range, scr_x_shift, scr_y_shift)
     plot_line(scr, darkgreen, reso, 5, runway_d[0], runway_d[1], min_x, max_y, x_range, y_range, scr_x_shift, scr_y_shift)
     
