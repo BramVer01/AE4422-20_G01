@@ -1,7 +1,7 @@
 """
 Run-me.py is the main file of the simulation. Run this file to run the simulation.
 """
-
+import numpy as np
 import os
 import pandas as pd
 import networkx as nx
@@ -415,9 +415,77 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
             "avg_total_time": avg_total_time,
             "avg_distance": avg_distance}
 
-# To run the simulation standalone:
+
+
+# if __name__ == "__main__":
+#     run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
+
+
 if __name__ == "__main__":
-    run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
+    num_runs = 400
+    visualization = False
+    visualization_speed = 0.0001 
+
+    kpis = {
+        "collisions": [],
+        "tasks_completed": [],
+        "avg_execution_time": [],
+        "avg_total_time": [],
+        "avg_distance": []
+    }
+
+    cv_tracking = {
+        key: [] for key in kpis
+    }
+
+    def compute_cv(data):
+        if len(data) < 2:
+            return 0
+        mean = np.mean(data)
+        std = np.std(data, ddof=1)
+        return std / mean if mean != 0 else 0
+
+    # --- Run simulation N times ---
+    epsilon = 0.01
+    window_size = 25
+    early_stop = False
+
+    for i in range(1, num_runs + 1):
+        print(f"\n--- Running simulation {i} ---")
+        kpi = run_simulation(visualization_speed, task_interval, total_tugs, simulation_time)
+
+        for key in kpis:
+            kpis[key].append(kpi[key])
+            cv = compute_cv(kpis[key])
+            cv_tracking[key].append(cv)
+
+            #  Early stopping if, over the last window_size iterations the acceptable change threshold epsilon is not exceeded.
+        if i >= window_size:
+            stable = True
+            for key in cv_tracking:
+                recent_vals = cv_tracking[key][-window_size:]
+                if max(recent_vals) - min(recent_vals) > epsilon:
+                    stable = False
+                    break
+            if stable:
+                print(f"\n✅ Cv stabilized across all KPIs after {i} runs.")
+                early_stop = True
+                break
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for key in cv_tracking:
+        ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
+
+
+    ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
+    ax.set_xlabel("Number of Simulation Runs")
+    ax.set_ylabel("Coefficient of Variation (Cv)")
+    ax.legend()
+    ax.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 
 # if __name__ == "__main__":
