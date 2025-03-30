@@ -53,7 +53,7 @@ class Tug(object):
         self.coupled = start_node  # coupled flight/depot
         
         # Task related parameters
-        self.current_task = None
+        self.current_task = None # sthis tores the flight ID of the task 
         self.final_goal = None
         self.wait = None
         self.constraining_tug = None
@@ -350,6 +350,7 @@ class Tug(object):
         self.path_to_goal = []  # Reset path_to_goal to force replanning
         print(f"Tug {self.id} status updated to {self.status}. Goal set to pickup location: {self.goal}")
         return True
+
 
     def set_init_tug_params(self, tug_id, a_d, start_node, nodes_dict):
         """

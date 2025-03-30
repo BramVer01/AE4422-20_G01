@@ -62,6 +62,9 @@ class Depot:
 #             tug.request_path(task)
 
 class FlightTask:
+
+    _registry = {}  # Class-level registry to store FlightTask objects keyed by flight_id
+
     """Represents a flight task."""
     def __init__(self, flight_id, a_d, start_node, goal_node, spawn_time):
         self.flight_id = flight_id
@@ -69,7 +72,17 @@ class FlightTask:
         self.start_node = start_node
         self.goal_node = goal_node
         self.spawn_time = spawn_time
-
+        # Register this task by its flight_id
+        FlightTask._registry[flight_id] = self
+    
+    @classmethod
+    def get_task_by_id(cls, flight_id):
+        """
+        Returns the FlightTask object with the given flight_id.
+        If no task is found, returns None.
+        """
+        return cls._registry.get(flight_id)
+    
 
 
 
