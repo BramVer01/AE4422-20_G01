@@ -531,6 +531,11 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
 
 # New main function to run simulation and plot idle time histories
 if __name__ == "__main__":
+    run_simulation()
+
+
+'''idle time'''
+if __name__ == "__main__":
     # Run the simulation and capture results including idle time history.
     results = run_simulation()
     
