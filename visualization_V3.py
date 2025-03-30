@@ -109,7 +109,7 @@ def map_initialization(nodes_dict, edges_dict, LFPG_LAYOUT):  # function to init
             true_res = (root.winfo_screenwidth(), root.winfo_screenheight())
             root.destroy()
         except Exception:
-            true_res = (800, 600)  # Fallback resolution
+            true_res = (1600, 1000)  # Fallback resolution
 
     reso_ratio = map_properties['x_range'] / float(map_properties['y_range'])
 
