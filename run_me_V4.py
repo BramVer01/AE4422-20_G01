@@ -251,9 +251,9 @@ def generate_flight_task(flight_id, t, gate_status):
 
 
 def run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
-                  total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
+                   total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
     """
-    Main simulation function that runs the airport tug simulation
+    Main simulation function that runs the airport tug simulation and records idle time history.
     """
     # --- KPI Global Variables ---
     total_collisions = 0
@@ -267,7 +267,11 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     task_nodes = {}                    # List of nodes traversed during execution (for distance metric)
     prev_status = {}                   # Previous status for each tug
     waiting_aircraft = []              # List for aircraft waiting for gates
-    # ----------------------------------------------------------
+
+    # --- New: Idle Time Tracking ---
+    idle_times = {}            # Current accumulated idle time per tug
+    idle_time_history = {}     # History: for each tug, a list of accumulated idle time values per timestep
+    time_history = []          # History of simulation time
 
     # Initialize layout and graph
     nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
@@ -281,7 +285,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     departure_depot = Depot(1, position=DEPARTURE_DEPOT_POSITION)
     arrival_depot = Depot(2, position=ARRIVAL_DEPOT_POSITION)
 
-    # Create tugs and add to corresponding depot queue
+    # Create tugs and add to corresponding depot queue; initialize idle time tracking for each tug.
     for i in range(total_tugs):
         tug_id = i + 1
         if i < total_tugs // 2:
@@ -292,6 +296,8 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             arrival_depot.tugs.append(tug)
         atc.tug_list.append(tug)
         prev_status[tug.id] = tug.status
+        idle_times[tug.id] = 0           # Initialize current idle time
+        idle_time_history[tug.id] = []    # Initialize empty history list for this tug
 
     # Initialize Auctioneer
     auctioneer = Auctioneer(atc.tug_list)
@@ -317,7 +323,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 if "arrival_time" in info:
                     delay = t - info["arrival_time"] - 10
                 else:
-                    delay = "UNKNOWN"  # This prevents errors if no waiting time is found
+                    delay = "UNKNOWN"
                 print(f"Time {t}: Aircraft {info['flight_id']} at gate {gate} is now ready for departure. It had a delay of {delay} seconds.")
                 task = FlightTask(info["flight_id"], "D", gate, random.choice(DEPARTURE_RUNWAY_NODES), t)
                 if task:
@@ -363,12 +369,10 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
                                                            [departure_depot, arrival_depot], 
                                                            gamma=GAMMA, alpha=ALPHA, beta=BETA)
-                
                 for task in arrival_depot.tasks:
                     bidders_value_price = tug.bidders_value(task, nodes_dict, heuristics, t, 
                                                            [departure_depot, arrival_depot], 
                                                            gamma=GAMMA, alpha=ALPHA, beta=BETA)
-                
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
                 if hasattr(tug, 'path_to_goal'):
                     print(f"  Current path: {tug.path_to_goal}")
@@ -376,7 +380,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 else:
                     print("  Current path: None")
         
-        # --- Collision Detection KPI (always computed) ---
+        # --- Collision Detection KPI ---
         current_states = {}
         for tug in atc.tug_list:
             tug.get_node_by_xy()
@@ -388,9 +392,8 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     "heading": tug.heading,
                     "has_flight": has_flight,
                     "status": tug.status,
-                    "bat_perc": tug.bat_perc  # Battery percentage
+                    "bat_perc": tug.bat_perc
                 }
-        
         if visualization:
             escape_pressed = map_running(map_properties, current_states, t, departure_depot, arrival_depot, nodes_dict)
             timer.sleep(visualization_speed)
@@ -402,14 +405,14 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                         total_collisions += 1
                         print(f"Collision detected between Tug {id1} and Tug {id2} at time {t}")
 
-        # Tasks Assignment
+        # --- Tasks Assignment ---
         tasks_available = departure_depot.tasks + arrival_depot.tasks
         if len(tasks_available) > 0 and (t/DELTA_T).is_integer():
             auctioneer.tug_availability(atc.tug_list)
             auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
             auctioneer.decision(departure_depot, arrival_depot, START_NODES)
 
-        # Tugs Charging
+        # --- Tugs Charging ---
         departure_depot.charging(DT)
         arrival_depot.charging(DT)
 
@@ -439,33 +442,22 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         atc.constraints_at_t = [con for con in atc.constraints if con["timestep"] == round(t+DELTA_T, 1)]
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
-                # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
                 tug.move(DT, t, atc.constraints_at_t, LFPG_LAYOUT, departure_depot, arrival_depot)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
-        # We record two time metrics:
-        #   1. Execution Time (old KPI): from when a tug enters "executing" until it transitions to "to_depot".
-        #   2. Total Task Time (new KPI): from when a tug is assigned a task (idle -> moving_to_task) until it returns to "idle".
         for tug in atc.tug_list:
             current_node = getattr(tug, 'current_node', tug.start)
-            # Record total task start time when a tug is assigned a task:
             if prev_status[tug.id] == "idle" and tug.status == "moving_to_task":
                 total_task_start_times[tug.id] = t
-
-            # Record execution start time when a tug transitions from moving_to_task to executing:
             if prev_status[tug.id] == "moving_to_task" and tug.status == "executing":
                 execution_start_times[tug.id] = t
                 task_nodes[tug.id] = [current_node]
-
-            # Update node list while task is active:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 if tug.id in task_nodes:
                     if task_nodes[tug.id][-1] != current_node:
                         task_nodes[tug.id].append(current_node)
                 else:
                     task_nodes[tug.id] = [current_node]
-
-            # When execution completes (executing -> to_depot), record execution time:
             if prev_status[tug.id] == "executing" and tug.status == "to_depot":
                 if tug.id in execution_start_times and tug.id in task_nodes:
                     exec_duration = t - execution_start_times[tug.id]
@@ -476,15 +468,12 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     print(f"Tug {tug.id} executed task in {exec_duration} sec, nodes traversed: {traveled_distance}")
                     del execution_start_times[tug.id]
                     del task_nodes[tug.id]
-
-            # When total task completes (to_depot -> idle), record total task time:
-            if prev_status[tug.id] == "to_depot" and tug.status == "idle" or tug.status == "moving_to_task":
+            if (prev_status[tug.id] == "to_depot" and tug.status == "idle") or tug.status == "moving_to_task":
                 if tug.id in total_task_start_times:
                     total_duration = t - total_task_start_times[tug.id]
                     total_task_completion_times.append(total_duration)
                     print(f"Tug {tug.id} completed total task in {total_duration} sec")
                     del total_task_start_times[tug.id]
-
             prev_status[tug.id] = tug.status
 
         # --- Update Depot Queues for Idle Tugs ---
@@ -500,10 +489,18 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                         arrival_depot.tugs.append(tug)
                         tug.set_init_tug_params(tug.id, "A", arrival_depot.position, nodes_dict)
                         print(f"Tug {tug.id} has returned to the arrival depot.")
-
+        
+        # --- New: Accumulate Idle Time for Each Tug ---
+        for tug in atc.tug_list:
+            if tug.status == "idle":
+                idle_times[tug.id] += DT
+        # Record the current time and idle time for each tug
+        time_history.append(t)
+        for tug in atc.tug_list:
+            idle_time_history[tug.id].append(idle_times[tug.id])
+        
         t = t + DT
 
-    # --- Compute Average KPI Values ---
     avg_execution_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
     avg_total_time = sum(total_task_completion_times) / len(total_task_completion_times) if total_task_completion_times else 0
     avg_distance = sum(task_distances) / len(task_distances) if task_distances else 0
@@ -516,17 +513,42 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     print("Average task distance (in nodes traversed):", avg_distance)
     print("-----------------------")
 
+    print("\n----- Idle Time Summary -----")
+    for tug_id, idle_time in idle_times.items():
+         print(f"Tug {tug_id}: Accumulated Idle Time = {idle_time:.2f} seconds")
+
+    # Return all KPI metrics along with idle time history and simulation time history.
     return {
-        "collisions": total_collisions,
-        "tasks_completed": total_tasks_completed,
-        "avg_execution_time": avg_execution_time,
-        "avg_total_time": avg_total_time,
-        "avg_distance": avg_distance
+         "collisions": total_collisions,
+         "tasks_completed": total_tasks_completed,
+         "avg_execution_time": avg_execution_time,
+         "avg_total_time": avg_total_time,
+         "avg_distance": avg_distance,
+         "idle_time_history": idle_time_history,
+         "time_history": time_history
     }
 
-# To run the simulation standalone:
-# if __name__ == "__main__":
-#     run_simulation()
+
+# New main function to run simulation and plot idle time histories
+if __name__ == "__main__":
+    # Run the simulation and capture results including idle time history.
+    results = run_simulation()
+    
+    # Extract idle time history and time history.
+    idle_time_history = results["idle_time_history"]
+    time_history = results["time_history"]
+    
+    # Plot the accumulated idle time per tug versus simulation time.
+    import matplotlib.pyplot as plt  # Ensure matplotlib is imported
+    plt.figure(figsize=(10, 6))
+    for tug_id, idle_times in idle_time_history.items():
+         plt.plot(time_history, idle_times, label=f"Tug {tug_id}")
+    plt.xlabel("Simulation Time (s)")
+    plt.ylabel("Accumulated Idle Time (s)")
+    plt.title("Idle Time of Each Tug Over Simulation Time")
+    plt.legend()
+    plt.show()
+
 
 
 # '''Testing normality of KPIs'''
