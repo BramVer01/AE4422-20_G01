@@ -51,7 +51,7 @@ GATE_NODES = [97.0, 34.0, 35.0, 36.0, 98.0]
 DEPARTURE_RUNWAY_NODES = [1.0, 2.0]
 GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
-# Bidding parameters Ye
+# Bidding parameters
 GAMMA = 1
 ALPHA = 1
 BETA = 1
@@ -519,7 +519,7 @@ def plot_distribution(data, name):
 
 '''Testing normality of KPIs'''
 if __name__ == "__main__":
-    num_runs = 100  # Adjust the number of simulation runs as needed
+    num_runs = 20  # Adjust the number of simulation runs as needed
     collisions_list = []
     tasks_completed_list = []
     avg_execution_time_list = []
@@ -567,6 +567,222 @@ if __name__ == "__main__":
         plot_distribution(cpu_runtime_list, "CPU Runtime")
     else:
         print("No successful simulation runs to analyze KPIs.")
+
+
+#SENSITIVITY ANALYSIS TABLE: (for now done with 3 simulations per sensitivity adjustment as otherwise it would take hours)
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import pandas as pd
+import time
+import os
+from scipy import stats
+
+
+
+# Define base parameter values
+base_values = {
+    'task_interval': 3,  
+    'total_tugs': 4,     
+    'simulation_time': 100,
+    'alpha': ALPHA,
+    'beta': BETA,
+    'gamma': GAMMA
+}
+
+# Define parameter ranges to explore
+param_ranges = {
+    'task_interval': (2, 6),
+    'total_tugs': (5, 15),
+    'simulation_time': (100, 150),
+    'alpha': (ALPHA * 0.8, ALPHA * 1.2),
+    'beta': (BETA * 0.8, BETA * 1.2),
+    'gamma': (GAMMA * 0.8, GAMMA * 1.2)
+}
+
+def improved_sensitivity_analysis(parameters, base_values, ranges, num_samples=3, num_replicates=3):
+    """
+    Perform improved sensitivity analysis for parameters with wider, custom ranges.
+    
+    Args:
+        parameters (list): List of parameter names to analyze
+        base_values (dict): Dictionary with base values for each parameter
+        ranges (dict): Dictionary with (min, max) ranges for each parameter
+        num_samples (int): Number of samples to take within each parameter range
+        num_replicates (int): Number of simulation replicates for each parameter setting
+    
+    Returns:
+        pd.DataFrame: Dataframe with sensitivity results
+    """
+    results = []
+    
+    # Define KPIs to track
+    kpis = ["collisions", "tasks_completed", "avg_execution_time", 
+            "avg_total_time", "avg_distance", "cpu_runtime", "error_rate"]
+    
+    print(f"Starting improved sensitivity analysis with {len(parameters)} parameters")
+    print(f"Base values: {base_values}")
+    print(f"Parameter ranges: {ranges}")
+    
+    # Track baseline performance
+    baseline_results = {kpi: [] for kpi in kpis}
+    
+    print("\n--- Running baseline simulations ---")
+    for i in range(num_replicates):
+        print(f"Baseline simulation {i+1}/{num_replicates}")
+        try:
+            kpi_result = run_simulation(
+                visualization_speed=0.001,
+                task_interval=base_values.get('task_interval', 3),
+                total_tugs=base_values.get('total_tugs', 4),
+                simulation_time=base_values.get('simulation_time', 100)
+            )
+            for kpi in kpis:
+                if kpi in kpi_result:
+                    baseline_results[kpi].append(kpi_result[kpi])
+        except Exception as e:
+            print(f"Error in baseline simulation {i+1}: {e}")
+    
+    # Calculate mean values for baseline
+    baseline_means = {kpi: np.mean(baseline_results[kpi]) for kpi in kpis if baseline_results[kpi]}
+    
+    print(f"\n--- Baseline simulation results ---")
+    for kpi, mean in baseline_means.items():
+        print(f"{kpi}: {mean:.4f}")
+    
+    # For each parameter, run simulations at different points in the range
+    for param in parameters:
+        if param not in ranges:
+            print(f"Warning: Parameter {param} not found in ranges. Skipping.")
+            continue
+        
+        param_range = ranges[param]
+        base_value = base_values[param]
+        
+        # Create evenly spaced samples across the range
+        if param == 'total_tugs':  # For discrete parameters, ensure integer values
+            param_values = np.linspace(param_range[0], param_range[1], num_samples, dtype=int)
+        else:
+            param_values = np.linspace(param_range[0], param_range[1], num_samples)
+        
+        print(f"\n--- Parameter: {param} ---")
+        print(f"Base value: {base_value}")
+        print(f"Testing values: {param_values}")
+        
+        # Results for this parameter
+        param_results = {value: {kpi: [] for kpi in kpis} for value in param_values}
+        
+        # Run simulations for each parameter value
+        for value in param_values:
+            print(f"\nRunning simulations for {param} = {value}")
+            for i in range(num_replicates):
+                print(f"Simulation {i+1}/{num_replicates}")
+                try:
+                    # Create parameter dict for this run
+                    params_dict = base_values.copy()
+                    params_dict[param] = value
+                    
+                    kpi_result = run_simulation(
+                        visualization_speed=0.001,
+                        task_interval=params_dict.get('task_interval', 3),
+                        total_tugs=params_dict.get('total_tugs', 4),
+                        simulation_time=params_dict.get('simulation_time', 100)
+                    )
+                    for kpi in kpis:
+                        if kpi in kpi_result:
+                            param_results[value][kpi].append(kpi_result[kpi])
+                except Exception as e:
+                    print(f"Error in simulation {i+1}: {e}")
+        
+        # Calculate mean values for each parameter value
+        mean_results = {value: {kpi: np.mean(param_results[value][kpi]) 
+                              for kpi in kpis if param_results[value][kpi]} 
+                      for value in param_values}
+        
+        # Calculate linear regression for each KPI to get sensitivity
+        for kpi in kpis:
+            # Check if we have results for this KPI
+            if not all(kpi in mean_results[value] for value in param_values):
+                continue
+                
+            x_values = [float(value) for value in param_values]
+            y_values = [mean_results[value][kpi] for value in param_values]
+            
+            # Calculate normalized sensitivity using linear regression
+            if len(x_values) >= 2:  # Need at least 2 points for regression
+                slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
+                
+                # Normalize by the base value and the average KPI value
+                param_range_pct = (param_range[1] - param_range[0]) / base_value
+                avg_kpi = np.mean(y_values)
+                
+                # Avoid division by zero
+                if avg_kpi != 0:
+                    normalized_sensitivity = slope * base_value / avg_kpi
+                else:
+                    normalized_sensitivity = slope * base_value
+                
+                # Calculate elasticity (% change in output / % change in input)
+                elasticity = normalized_sensitivity
+                
+                # Store results
+                results.append({
+                    'parameter': param,
+                    'kpi': kpi,
+                    'base_value': base_value,
+                    'min_value': param_range[0],
+                    'max_value': param_range[1],
+                    'slope': slope,
+                    'normalized_sensitivity': normalized_sensitivity,
+                    'elasticity': elasticity,
+                    'r_squared': r_value ** 2,
+                    'p_value': p_value,
+                    'std_err': std_err,
+                    'abs_sensitivity': abs(normalized_sensitivity)
+                })
+                
+                print(f"{kpi}: Normalized Sensitivity = {normalized_sensitivity:.4f}, "
+                      f"R² = {r_value**2:.4f}, p-value = {p_value:.4f}")
+    
+    # Convert to dataframe
+    results_df = pd.DataFrame(results)
+    
+    # Create parameter rankings for each KPI
+    rankings_data = []
+    
+    for kpi in kpis:
+        kpi_results = results_df[results_df['kpi'] == kpi]
+        if not kpi_results.empty:
+            # Rank parameters by absolute sensitivity
+            ranked = kpi_results.sort_values('abs_sensitivity', ascending=False)
+            rank_dict = {row['parameter']: i+1 for i, (_, row) in enumerate(ranked.iterrows())}
+            
+            # Add to rankings data
+            rankings_data.append({
+                'KPI': kpi,
+                **{param: rank_dict.get(param, '-') for param in parameters}
+            })
+    
+    rankings_df = pd.DataFrame(rankings_data)
+    
+    # Print rankings table
+    print("\n--- Parameter Sensitivity Rankings by KPI ---")
+    print(rankings_df)
+    
+    return results_df, rankings_df
+
+# Run the improved sensitivity analysis
+results_df, rankings_df = improved_sensitivity_analysis(
+    parameters=['task_interval', 'total_tugs', 'simulation_time', 'alpha', 'beta', 'gamma'],
+    base_values=base_values,
+    ranges=param_ranges,
+    num_samples=3,  # Number of samples within each range
+    num_replicates=3  # Number of replicates for statistical significance
+)
+
+# Save results
+results_df.to_csv('sensitivity_analysis_results.csv', index=False)
+rankings_df.to_csv('parameter_rankings.csv', index=False)
 
 
 # if __name__ == "__main__":
