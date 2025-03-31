@@ -610,104 +610,299 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
          "avg_state_times": avg_state_times
     }
 
-if __name__ == "__main__":
-    # Simulation settings
-    SIMULATION_TIME = 100
-    PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
-    DELTA_T = 0.5  # Time step for planning
-    DT = 0.1     # Time step for movement
 
-    # Visualization settings
-    plot_graph = False      # Show graph representation in NetworkX
-    visualization = False   # Pygame visualization
+if __name__ == "__main__":
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    from scipy import stats
+
+    # Simulation settings
+    SIMULATION_TIME = 300
+    PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+    DELTA_T = 0.5            # Time step for planning
+    DT = 0.1                 # Time step for movement
+
+    # Visualization settings (disabled for batch runs)
+    plot_graph = False       # Show graph representation in NetworkX
+    visualization = False    # Pygame visualization
     visualization_speed = 0.1
 
-    task_interval = 3       # Generate a task every 3 seconds
-    total_tugs = 5         # Total number of tugs
+    task_interval = 3        # Generate a task every 3 seconds
+    total_tugs = 5           # Total number of tugs
 
-    # Run the simulation and capture results
-    results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+    n_runs = 100  # Number of simulation runs
+
+    # Lists to collect scalar KPIs from each run
+    collisions_list = []
+    tasks_completed_list = []
+    avg_execution_time_list = []
+    avg_total_time_list = []
+    avg_distance_list = []
+    avg_delay_list = []  # For each run, we'll store the average delay (if available)
+
+    # Dictionary to collect state times (per run) for each state
+    state_times_dict = {"idle": [], "moving_to_task": [], "executing": [], "to_depot": []}
+
+    # Dictionaries to collect time-series data (each key will have a list of arrays, one per run)
+    idle_time_series = {}    # key: tug_id, value: list of idle time arrays (per time step)
+    battery_time_series = {} # key: tug_id, value: list of battery percentage arrays (per time step)
+    common_time_history = None
+
+    # Collect all individual delay values (from all runs)
+    all_delays = []
+
+    print("Running simulation batch...")
+    for run in range(n_runs):
+        print(f"Run {run+1}/{n_runs}")
+        results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+        
+        collisions_list.append(results["collisions"])
+        tasks_completed_list.append(results["tasks_completed"])
+        avg_execution_time_list.append(results["avg_execution_time"])
+        avg_total_time_list.append(results["avg_total_time"])
+        avg_distance_list.append(results["avg_distance"])
+        if results["delays"]:
+            run_avg_delay = np.mean(results["delays"])
+            avg_delay_list.append(run_avg_delay)
+            all_delays.extend(results["delays"])
+        else:
+            avg_delay_list.append(np.nan)
+        
+        for state in state_times_dict.keys():
+            state_times_dict[state].append(results["avg_state_times"][state])
+        
+        # For time series, assume each run has the same time_history
+        if common_time_history is None:
+            common_time_history = results["time_history"]
+        for tug_id, idle_list in results["idle_time_history"].items():
+            if tug_id not in idle_time_series:
+                idle_time_series[tug_id] = []
+            idle_time_series[tug_id].append(np.array(idle_list))
+        for tug_id, batt_list in results["battery_history"].items():
+            if tug_id not in battery_time_series:
+                battery_time_series[tug_id] = []
+            battery_time_series[tug_id].append(np.array(batt_list))
     
-    # Extract histories and KPIs
-    idle_time_history = results["idle_time_history"]
-    battery_history = results["battery_history"]
-    time_history = results["time_history"]
-    avg_state_times = results["avg_state_times"]
-    collisions = results["collisions"]
-    tasks_completed = results["tasks_completed"]
-    avg_execution_time = results["avg_execution_time"]
-    avg_total_time = results["avg_total_time"]
-    avg_distance = results["avg_distance"]
-    delays = results["delays"]
-    avg_delay = sum(delays)/len(delays) if delays else None
+    # Function to compute mean and 95% confidence interval
+    def compute_mean_ci(data, confidence=0.95):
+        a = np.array(data)
+        mean = np.nanmean(a)
+        std_err = stats.sem(a, nan_policy='omit')
+        h = std_err * stats.t.ppf((1 + confidence) / 2., len(a)-1)
+        return mean, h
 
-    # Create a dashboard with multiple subplots using GridSpec
-    import matplotlib.gridspec as gridspec
-    fig = plt.figure(constrained_layout=True, figsize=(16, 12))
+    # Compute aggregated KPIs
+    collisions_mean, collisions_ci = compute_mean_ci(collisions_list)
+    tasks_completed_mean, tasks_completed_ci = compute_mean_ci(tasks_completed_list)
+    avg_exec_mean, avg_exec_ci = compute_mean_ci(avg_execution_time_list)
+    avg_total_mean, avg_total_ci = compute_mean_ci(avg_total_time_list)
+    avg_distance_mean, avg_distance_ci = compute_mean_ci(avg_distance_list)
+    avg_delay_mean, avg_delay_ci = compute_mean_ci(avg_delay_list)
+
+    # Compute aggregated state times
+    state_means = {}
+    state_cis = {}
+    for state, values in state_times_dict.items():
+        m, ci = compute_mean_ci(values)
+        state_means[state] = m
+        state_cis[state] = ci
+
+    # Compute average and CI for idle time and battery time series (per tug)
+    idle_time_avg = {}
+    idle_time_ci = {}
+    for tug_id, arrays in idle_time_series.items():
+        data = np.vstack(arrays)  # shape: (n_runs, time_steps)
+        mean_series = np.mean(data, axis=0)
+        std_err_series = stats.sem(data, axis=0)
+        ci_series = std_err_series * stats.t.ppf((1+0.95)/2., n_runs-1)
+        idle_time_avg[tug_id] = mean_series
+        idle_time_ci[tug_id] = ci_series
+
+    battery_time_avg = {}
+    battery_time_ci = {}
+    for tug_id, arrays in battery_time_series.items():
+        data = np.vstack(arrays)
+        mean_series = np.mean(data, axis=0)
+        std_err_series = stats.sem(data, axis=0)
+        ci_series = std_err_series * stats.t.ppf((1+0.95)/2., n_runs-1)
+        battery_time_avg[tug_id] = mean_series
+        battery_time_ci[tug_id] = ci_series
+
+    # Build dashboard plots using GridSpec
+    fig = plt.figure(constrained_layout=True, figsize=(12, 10))
     gs = fig.add_gridspec(3, 2)
 
-    # Subplot 1: Idle Time History (Line Plot)
+    # Subplot 1: Idle Time History (Mean with 95% CI)
     ax1 = fig.add_subplot(gs[0, 0])
-    for tug_id, idle_times in idle_time_history.items():
-         ax1.plot(time_history, idle_times, label=f"Tug {tug_id}")
+    for tug_id, avg_series in idle_time_avg.items():
+        ci_series = idle_time_ci[tug_id]
+        ax1.plot(common_time_history, avg_series, label=f"Tug {tug_id}")
+        ax1.fill_between(common_time_history, avg_series - ci_series, avg_series + ci_series, alpha=0.2)
     ax1.set_xlabel("Simulation Time (s)")
     ax1.set_ylabel("Accumulated Idle Time (s)")
-    ax1.set_title("Idle Time of Each Tug")
+    ax1.set_title("Idle Time of Each Tug (Mean ± 95% CI)")
     ax1.legend(fontsize='small')
 
-    # Subplot 2: Battery Percentage History (Line Plot)
+    # Subplot 2: Battery Percentage History (Mean with 95% CI)
     ax2 = fig.add_subplot(gs[0, 1])
-    for tug_id, bat_history in battery_history.items():
-         ax2.plot(time_history, bat_history, label=f"Tug {tug_id}")
+    for tug_id, avg_series in battery_time_avg.items():
+        ci_series = battery_time_ci[tug_id]
+        ax2.plot(common_time_history, avg_series, label=f"Tug {tug_id}")
+        ax2.fill_between(common_time_history, avg_series - ci_series, avg_series + ci_series, alpha=0.2)
     ax2.set_xlabel("Simulation Time (s)")
     ax2.set_ylabel("Battery Percentage (%)")
-    ax2.set_title("Battery Percentage Over Time")
+    ax2.set_title("Battery Percentage Over Time (Mean ± 95% CI)")
     ax2.legend(fontsize='small')
 
-    # Subplot 3: Tug State Times (Bar Chart of Average State Times)
+    # Subplot 3: Tug State Times (Bar Chart with error bars)
     ax3 = fig.add_subplot(gs[1, 0])
-    states = list(avg_state_times.keys())
-    times = [avg_state_times[state] for state in states]
-    ax3.bar(states, times, color='skyblue')
+    states = list(state_means.keys())
+    means = [state_means[s] for s in states]
+    cis = [state_cis[s] for s in states]
+    ax3.bar(states, means, yerr=cis, capsize=5, color='skyblue')
     ax3.set_xlabel("Tug States")
     ax3.set_ylabel("Average Time (s)")
-    ax3.set_title("Average Tug State Times")
+    ax3.set_title("Average Tug State Times (Mean ± 95% CI)")
 
-    # Subplot 4: Delay Histogram (if delay data is available)
+    # Subplot 4: Delay Histogram (Aggregated from all runs)
     ax4 = fig.add_subplot(gs[1, 1])
-    if delays:
-         ax4.hist(delays, bins=10, edgecolor='black', alpha=0.7)
-         ax4.set_xlabel("Delay (s)")
-         ax4.set_ylabel("Frequency")
-         ax4.set_title("Delay Distribution")
+    if all_delays:
+        ax4.hist(all_delays, bins=20, edgecolor='black', alpha=0.7)
+        ax4.set_xlabel("Delay (s)")
+        ax4.set_ylabel("Frequency")
+        ax4.set_title("Delay Distribution Over All Runs")
     else:
-         ax4.text(0.5, 0.5, "No Delay Data", ha='center', va='center', fontsize=12)
-         ax4.set_axis_off()
+        ax4.text(0.5, 0.5, "No Delay Data", ha='center', va='center', fontsize=12)
+        ax4.set_axis_off()
 
-    # Subplot 5: KPIs Table (spanning the entire bottom row)
+    # Subplot 5: KPIs Table (Aggregated Metrics with Confidence Intervals)
     ax5 = fig.add_subplot(gs[2, :])
     ax5.axis('off')
     kpi_labels = ["Total Collisions", "Tasks Completed", "Avg Execution Time (s)",
                   "Avg Total Task Time (s)", "Avg Task Distance", "Avg Delay (s)"]
-    kpi_values = [
-         collisions,
-         tasks_completed,
-         f"{avg_execution_time:.2f}" if avg_execution_time else "N/A",
-         f"{avg_total_time:.2f}" if avg_total_time else "N/A",
-         f"{avg_distance:.2f}" if avg_distance else "N/A",
-         f"{avg_delay:.2f}" if avg_delay is not None else "N/A"
-    ]
-    table_data = [[label, value] for label, value in zip(kpi_labels, kpi_values)]
-    table = ax5.table(cellText=table_data, colLabels=["KPI", "Value"],
+    kpi_means = [collisions_mean, tasks_completed_mean, avg_exec_mean, avg_total_mean, avg_distance_mean, avg_delay_mean]
+    kpi_cis = [collisions_ci, tasks_completed_ci, avg_exec_ci, avg_total_ci, avg_distance_ci, avg_delay_ci]
+    kpi_table_data = []
+    for label, mean, ci in zip(kpi_labels, kpi_means, kpi_cis):
+        kpi_table_data.append([label, f"{mean:.2f} ± {ci:.2f}"])
+    table = ax5.table(cellText=kpi_table_data, colLabels=["KPI", "Mean ± 95% CI"],
                       cellLoc='center', loc='center')
     table.auto_set_font_size(False)
     table.set_fontsize(12)
     table.scale(1, 2)
-    ax5.set_title("Simulation KPIs", fontweight="bold", fontsize=14)
+    ax5.set_title(f"Aggregated Simulation KPIs ({n_runs} Runs)", fontweight="bold", fontsize=14)
 
-    plt.suptitle("Simulation Dashboard", fontsize=16, fontweight="bold")
+    plt.suptitle(f"Simulation Dashboard: {n_runs} Runs with Averages and 95% Confidence Intervals", fontsize=18, fontweight="bold")
     plt.show()
 
+
+
+# if __name__ == "__main__":
+#     # Simulation settings
+#     SIMULATION_TIME = 300
+#     PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+#     DELTA_T = 0.5  # Time step for planning
+#     DT = 0.1     # Time step for movement
+
+#     # Visualization settings
+#     plot_graph = False          # Show graph representation in NetworkX
+#     visualization = False       # Pygame visualization
+#     visualization_speed = 0.1
+
+#     task_interval = 3           # Generate a task every x seconds
+#     total_tugs = 5              # Total number of tugs
+
+#     # Run the simulation and capture results
+#     results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+    
+#     # Extract histories and KPIs
+#     idle_time_history = results["idle_time_history"]
+#     battery_history = results["battery_history"]
+#     time_history = results["time_history"]
+#     avg_state_times = results["avg_state_times"]
+#     collisions = results["collisions"]
+#     tasks_completed = results["tasks_completed"]
+#     avg_execution_time = results["avg_execution_time"]
+#     avg_total_time = results["avg_total_time"]
+#     avg_distance = results["avg_distance"]
+#     delays = results["delays"]
+#     avg_delay = sum(delays)/len(delays) if delays else None
+
+#     # Create a dashboard with multiple subplots using GridSpec
+#     import matplotlib.gridspec as gridspec
+#     fig = plt.figure(constrained_layout=True, figsize=(12, 9))
+#     gs = fig.add_gridspec(3, 2)
+
+#     # Subplot 1: Idle Time History (Line Plot)
+#     ax1 = fig.add_subplot(gs[0, 0])
+#     for tug_id, idle_times in idle_time_history.items():
+#          ax1.plot(time_history, idle_times, label=f"Tug {tug_id}")
+#     ax1.set_xlabel("Simulation Time (s)")
+#     ax1.set_ylabel("Accumulated Idle Time (s)")
+#     ax1.set_title("Idle Time of Each Tug")
+#     ax1.legend(fontsize='small')
+
+#     # Subplot 2: Battery Percentage History (Line Plot)
+#     ax2 = fig.add_subplot(gs[0, 1])
+#     for tug_id, bat_history in battery_history.items():
+#          ax2.plot(time_history, bat_history, label=f"Tug {tug_id}")
+#     ax2.set_xlabel("Simulation Time (s)")
+#     ax2.set_ylabel("Battery Percentage (%)")
+#     ax2.set_title("Battery Percentage Over Time")
+#     ax2.legend(fontsize='small')
+
+#     # Subplot 3: Tug State Times (Bar Chart of Average State Times)
+#     ax3 = fig.add_subplot(gs[1, 0])
+#     states = list(avg_state_times.keys())
+#     times = [avg_state_times[state] for state in states]
+#     ax3.bar(states, times, color='skyblue')
+#     ax3.set_xlabel("Tug States")
+#     ax3.set_ylabel("Average Time (s)")
+#     ax3.set_title("Average Tug State Times")
+
+#     # Subplot 4: Delay Histogram (if delay data is available)
+#     ax4 = fig.add_subplot(gs[1, 1])
+#     if delays:
+#          ax4.hist(delays, bins=10, edgecolor='black', alpha=0.7)
+#          ax4.set_xlabel("Delay (s)")
+#          ax4.set_ylabel("Frequency")
+#          ax4.set_title("Delay Distribution")
+#     else:
+#          ax4.text(0.5, 0.5, "No Delay Data", ha='center', va='center', fontsize=12)
+#          ax4.set_axis_off()
+
+#     # Subplot 5: KPIs Table (spanning the entire bottom row)
+#     ax5 = fig.add_subplot(gs[2, :])
+#     ax5.axis('off')
+#     kpi_labels = ["Total Collisions", "Tasks Completed", "Avg Execution Time (s)",
+#                   "Avg Total Task Time (s)", "Avg Task Distance", "Avg Delay (s)"]
+#     kpi_values = [
+#          collisions,
+#          tasks_completed,
+#          f"{avg_execution_time:.2f}" if avg_execution_time else "N/A",
+#          f"{avg_total_time:.2f}" if avg_total_time else "N/A",
+#          f"{avg_distance:.2f}" if avg_distance else "N/A",
+#          f"{avg_delay:.2f}" if avg_delay is not None else "N/A"
+#     ]
+#     table_data = [[label, value] for label, value in zip(kpi_labels, kpi_values)]
+#     table = ax5.table(cellText=table_data, colLabels=["KPI", "Value"],
+#                       cellLoc='center', loc='center')
+#     table.auto_set_font_size(False)
+#     table.set_fontsize(12)
+#     table.scale(1, 2)
+#     ax5.set_title("Simulation KPIs", fontweight="bold", fontsize=14)
+
+#     plt.suptitle("Simulation Dashboard", fontsize=16, fontweight="bold")
+#     plt.show()
+
+
+
+
+
+
+
+'''OLD MAIN FUNCTIONS'''
 
 # # New main function: Run simulation and plot idle time histories.
 # if __name__ == "__main__":
