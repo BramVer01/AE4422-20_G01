@@ -610,68 +610,128 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
          "avg_state_times": avg_state_times
     }
 
-
-# New main function: Run simulation and plot idle time histories.
 if __name__ == "__main__":
     # Simulation settings
-    SIMULATION_TIME = 300
+    SIMULATION_TIME = 100
     PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
     DELTA_T = 0.5  # Time step for planning
-    DT = 0.1  # Time step for movement
+    DT = 0.1     # Time step for movement
 
-    #Visualization (can also be changed)
-    plot_graph = False    #show graph representation in NetworkX
-    visualization = False        #pygame visualization
-    visualization_speed = 0.1 #set at 0.1 as default
+    # Visualization settings
+    plot_graph = False      # Show graph representation in NetworkX
+    visualization = False   # Pygame visualization
+    visualization_speed = 0.1
 
-    task_interval = 3    # New: generate a task every 5 seconds
-    total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+    task_interval = 3       # Generate a task every 3 seconds
+    total_tugs = 5         # Total number of tugs
 
-    # Run the simulation and capture results (including idle time history)
+    # Run the simulation and capture results
     results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
     
+    # Extract histories and KPIs
     idle_time_history = results["idle_time_history"]
-    time_history = results["time_history"]
-    
-    # Plot idle time for each tug versus simulation time.
-    plt.figure(figsize=(10, 6))
-    for tug_id, idle_times in idle_time_history.items():
-         plt.plot(time_history, idle_times, label=f"Tug {tug_id}")
-    plt.xlabel("Simulation Time (s)")
-    plt.ylabel("Accumulated Idle Time (s)")
-    plt.title("Idle Time of Each Tug Over Simulation Time")
-    plt.legend()
-    plt.show()
-
-    # --- Plot Battery Percentage History ---
     battery_history = results["battery_history"]
-    plt.figure(figsize=(10, 6))
+    time_history = results["time_history"]
+    avg_state_times = results["avg_state_times"]
+    collisions = results["collisions"]
+    tasks_completed = results["tasks_completed"]
+    avg_execution_time = results["avg_execution_time"]
+    avg_total_time = results["avg_total_time"]
+    avg_distance = results["avg_distance"]
+    delays = results["delays"]
+    avg_delay = sum(delays)/len(delays) if delays else None
+
+    # Create a dashboard with multiple subplots using GridSpec
+    import matplotlib.gridspec as gridspec
+    fig = plt.figure(constrained_layout=True, figsize=(16, 12))
+    gs = fig.add_gridspec(3, 2)
+
+    # Subplot 1: Idle Time History (Line Plot)
+    ax1 = fig.add_subplot(gs[0, 0])
+    for tug_id, idle_times in idle_time_history.items():
+         ax1.plot(time_history, idle_times, label=f"Tug {tug_id}")
+    ax1.set_xlabel("Simulation Time (s)")
+    ax1.set_ylabel("Accumulated Idle Time (s)")
+    ax1.set_title("Idle Time of Each Tug")
+    ax1.legend(fontsize='small')
+
+    # Subplot 2: Battery Percentage History (Line Plot)
+    ax2 = fig.add_subplot(gs[0, 1])
     for tug_id, bat_history in battery_history.items():
-         plt.plot(time_history, bat_history, label=f"Tug {tug_id}")
-    plt.xlabel("Simulation Time (s)")
-    plt.ylabel("Battery Percentage (%)")
-    plt.title("Battery Percentage of Tugs Over Simulation Time")
-    plt.legend()
+         ax2.plot(time_history, bat_history, label=f"Tug {tug_id}")
+    ax2.set_xlabel("Simulation Time (s)")
+    ax2.set_ylabel("Battery Percentage (%)")
+    ax2.set_title("Battery Percentage Over Time")
+    ax2.legend(fontsize='small')
+
+    # Subplot 3: Tug State Times (Bar Chart of Average State Times)
+    ax3 = fig.add_subplot(gs[1, 0])
+    states = list(avg_state_times.keys())
+    times = [avg_state_times[state] for state in states]
+    ax3.bar(states, times, color='skyblue')
+    ax3.set_xlabel("Tug States")
+    ax3.set_ylabel("Average Time (s)")
+    ax3.set_title("Average Tug State Times")
+
+    # Subplot 4: Delay Histogram (if delay data is available)
+    ax4 = fig.add_subplot(gs[1, 1])
+    if delays:
+         ax4.hist(delays, bins=10, edgecolor='black', alpha=0.7)
+         ax4.set_xlabel("Delay (s)")
+         ax4.set_ylabel("Frequency")
+         ax4.set_title("Delay Distribution")
+    else:
+         ax4.text(0.5, 0.5, "No Delay Data", ha='center', va='center', fontsize=12)
+         ax4.set_axis_off()
+
+    # Subplot 5: KPIs Table (spanning the entire bottom row)
+    ax5 = fig.add_subplot(gs[2, :])
+    ax5.axis('off')
+    kpi_labels = ["Total Collisions", "Tasks Completed", "Avg Execution Time (s)",
+                  "Avg Total Task Time (s)", "Avg Task Distance", "Avg Delay (s)"]
+    kpi_values = [
+         collisions,
+         tasks_completed,
+         f"{avg_execution_time:.2f}" if avg_execution_time else "N/A",
+         f"{avg_total_time:.2f}" if avg_total_time else "N/A",
+         f"{avg_distance:.2f}" if avg_distance else "N/A",
+         f"{avg_delay:.2f}" if avg_delay is not None else "N/A"
+    ]
+    table_data = [[label, value] for label, value in zip(kpi_labels, kpi_values)]
+    table = ax5.table(cellText=table_data, colLabels=["KPI", "Value"],
+                      cellLoc='center', loc='center')
+    table.auto_set_font_size(False)
+    table.set_fontsize(12)
+    table.scale(1, 2)
+    ax5.set_title("Simulation KPIs", fontweight="bold", fontsize=14)
+
+    plt.suptitle("Simulation Dashboard", fontsize=16, fontweight="bold")
     plt.show()
 
 
-# # New main function to run simulation and plot idle time histories
+# # New main function: Run simulation and plot idle time histories.
 # if __name__ == "__main__":
-#     run_simulation()
+#     # Simulation settings
+#     SIMULATION_TIME = 300
+#     PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+#     DELTA_T = 0.5  # Time step for planning
+#     DT = 0.1  # Time step for movement
 
+#     #Visualization (can also be changed)
+#     plot_graph = False    #show graph representation in NetworkX
+#     visualization = False        #pygame visualization
+#     visualization_speed = 0.1 #set at 0.1 as default
 
-# '''idle time'''
-# if __name__ == "__main__":
-#     # Run the simulation and capture results including idle time history.
-#     results = run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
-#                    total_tugs=total_tugs, simulation_time=SIMULATION_TIME)
+#     task_interval = 3    # New: generate a task every 5 seconds
+#     total_tugs = 10       # New: total number of tugs (will be split evenly between depots)
+
+#     # Run the simulation and capture results (including idle time history)
+#     results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
     
-#     # Extract idle time history and time history.
 #     idle_time_history = results["idle_time_history"]
 #     time_history = results["time_history"]
     
-#     # Plot the accumulated idle time per tug versus simulation time.
-#     import matplotlib.pyplot as plt  # Ensure matplotlib is imported
+#     # Plot idle time for each tug versus simulation time.
 #     plt.figure(figsize=(10, 6))
 #     for tug_id, idle_times in idle_time_history.items():
 #          plt.plot(time_history, idle_times, label=f"Tug {tug_id}")
@@ -680,6 +740,23 @@ if __name__ == "__main__":
 #     plt.title("Idle Time of Each Tug Over Simulation Time")
 #     plt.legend()
 #     plt.show()
+
+#     # --- Plot Battery Percentage History ---
+#     battery_history = results["battery_history"]
+#     plt.figure(figsize=(10, 6))
+#     for tug_id, bat_history in battery_history.items():
+#          plt.plot(time_history, bat_history, label=f"Tug {tug_id}")
+#     plt.xlabel("Simulation Time (s)")
+#     plt.ylabel("Battery Percentage (%)")
+#     plt.title("Battery Percentage of Tugs Over Simulation Time")
+#     plt.legend()
+#     plt.show()
+
+
+# # New main function to run simulation and plot idle time histories
+# if __name__ == "__main__":
+#     run_simulation()
+
 
 
 

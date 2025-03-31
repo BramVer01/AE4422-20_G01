@@ -413,9 +413,9 @@ class Tug(object):
         # Calculate a battery efficiency factor - prioritize tasks when battery is 30-80%
         battery_factor = 1.0
         if self.bat_perc < 30:
-            battery_factor = 0.05  # Strongly discourage taking tasks when battery is low
+            battery_factor = 0.  # Strongly discourage taking tasks when battery is low
         elif self.bat_perc < 50:
-            battery_factor = 0.1  # Somewhat discourage taking tasks when battery is getting low
+            battery_factor = 0  # Somewhat discourage taking tasks when battery is getting low
         elif self.bat_perc > 80:
             battery_factor = 1.5  # Encourage taking tasks when battery is high
         
