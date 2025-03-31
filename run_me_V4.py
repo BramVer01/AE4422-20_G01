@@ -78,7 +78,7 @@ DT = 0.1  # Time step for movement
 
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
-visualization = True        #pygame visualization
+visualization = False        #pygame visualization
 visualization_speed = 0.1 #set at 0.1 as default
 
 task_interval = 3    # New: generate a task every 5 seconds
@@ -274,7 +274,8 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
       - Ideal Completion Time is computed via a simple single-agent A* search from the task's start to goal.
       
     Additionally, this version tracks the total time each tug spends in each of the four states:
-      "idle", "moving_to_task", "executing", "to_depot", and computes the average time per state across all tugs.
+      "idle", "moving_to_task", "executing", "to_depot", computes the average time per state,
+    and records the battery percentage of the tugs over time.
     """
     # --- KPI Global Variables ---
     total_collisions = 0
@@ -296,6 +297,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     # --- New: Idle Time Tracking ---
     idle_times = {}            # Current accumulated idle time per tug
     idle_time_history = {}     # History: for each tug, a list of accumulated idle time values per timestep
+    battery_history = {}       # History: for each tug, a list of battery percentages per timestep
     time_history = []          # History of simulation time
 
     # Initialize layout and graph
@@ -310,7 +312,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     departure_depot = Depot(1, position=DEPARTURE_DEPOT_POSITION)
     arrival_depot = Depot(2, position=ARRIVAL_DEPOT_POSITION)
 
-    # Create tugs and add to depot queues; initialize idle time tracking.
+    # Create tugs and add to depot queues; initialize idle time and battery tracking.
     for i in range(total_tugs):
         tug_id = i + 1
         if i < total_tugs // 2:
@@ -323,6 +325,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         prev_status[tug.id] = tug.status
         idle_times[tug.id] = 0
         idle_time_history[tug.id] = []
+        battery_history[tug.id] = []  # Initialize battery history for each tug
 
     # Initialize state time tracking for each tug (for "idle", "moving_to_task", "executing", "to_depot")
     tug_state_times = {tug.id: {"idle": 0, "moving_to_task": 0, "executing": 0, "to_depot": 0} for tug in atc.tug_list}
@@ -547,6 +550,10 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         for tug in atc.tug_list:
             idle_time_history[tug.id].append(idle_times[tug.id])
         
+        # --- Accumulate Battery History ---
+        for tug in atc.tug_list:
+            battery_history[tug.id].append(tug.bat_perc)
+        
         # --- Accumulate State Time for Each Tug ---
         for tug in atc.tug_list:
             if tug.status in tug_state_times[tug.id]:
@@ -587,7 +594,8 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     print("\n----- Average State Times -----")
     print(avg_state_times)
     
-    # Return KPI metrics along with idle time, time histories, and state times.
+    
+    # Return KPI metrics along with idle time, battery history, time histories, and state times.
     return {
          "collisions": total_collisions,
          "tasks_completed": total_tasks_completed,
@@ -596,6 +604,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
          "avg_distance": avg_distance,
          "delays": delays,
          "idle_time_history": idle_time_history,
+         "battery_history": battery_history,
          "time_history": time_history,
          "tug_state_times": tug_state_times,
          "avg_state_times": avg_state_times
@@ -604,8 +613,22 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
 
 # New main function: Run simulation and plot idle time histories.
 if __name__ == "__main__":
+    # Simulation settings
+    SIMULATION_TIME = 300
+    PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+    DELTA_T = 0.5  # Time step for planning
+    DT = 0.1  # Time step for movement
+
+    #Visualization (can also be changed)
+    plot_graph = False    #show graph representation in NetworkX
+    visualization = False        #pygame visualization
+    visualization_speed = 0.1 #set at 0.1 as default
+
+    task_interval = 3    # New: generate a task every 5 seconds
+    total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
+
     # Run the simulation and capture results (including idle time history)
-    results = run_simulation()
+    results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
     
     idle_time_history = results["idle_time_history"]
     time_history = results["time_history"]
@@ -620,31 +643,43 @@ if __name__ == "__main__":
     plt.legend()
     plt.show()
 
+    # --- Plot Battery Percentage History ---
+    battery_history = results["battery_history"]
+    plt.figure(figsize=(10, 6))
+    for tug_id, bat_history in battery_history.items():
+         plt.plot(time_history, bat_history, label=f"Tug {tug_id}")
+    plt.xlabel("Simulation Time (s)")
+    plt.ylabel("Battery Percentage (%)")
+    plt.title("Battery Percentage of Tugs Over Simulation Time")
+    plt.legend()
+    plt.show()
+
 
 # # New main function to run simulation and plot idle time histories
 # if __name__ == "__main__":
 #     run_simulation()
 
 
-'''idle time'''
-if __name__ == "__main__":
-    # Run the simulation and capture results including idle time history.
-    results = run_simulation()
+# '''idle time'''
+# if __name__ == "__main__":
+#     # Run the simulation and capture results including idle time history.
+#     results = run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
+#                    total_tugs=total_tugs, simulation_time=SIMULATION_TIME)
     
-    # Extract idle time history and time history.
-    idle_time_history = results["idle_time_history"]
-    time_history = results["time_history"]
+#     # Extract idle time history and time history.
+#     idle_time_history = results["idle_time_history"]
+#     time_history = results["time_history"]
     
-    # Plot the accumulated idle time per tug versus simulation time.
-    import matplotlib.pyplot as plt  # Ensure matplotlib is imported
-    plt.figure(figsize=(10, 6))
-    for tug_id, idle_times in idle_time_history.items():
-         plt.plot(time_history, idle_times, label=f"Tug {tug_id}")
-    plt.xlabel("Simulation Time (s)")
-    plt.ylabel("Accumulated Idle Time (s)")
-    plt.title("Idle Time of Each Tug Over Simulation Time")
-    plt.legend()
-    plt.show()
+#     # Plot the accumulated idle time per tug versus simulation time.
+#     import matplotlib.pyplot as plt  # Ensure matplotlib is imported
+#     plt.figure(figsize=(10, 6))
+#     for tug_id, idle_times in idle_time_history.items():
+#          plt.plot(time_history, idle_times, label=f"Tug {tug_id}")
+#     plt.xlabel("Simulation Time (s)")
+#     plt.ylabel("Accumulated Idle Time (s)")
+#     plt.title("Idle Time of Each Tug Over Simulation Time")
+#     plt.legend()
+#     plt.show()
 
 
 
