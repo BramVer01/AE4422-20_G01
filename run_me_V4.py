@@ -71,7 +71,7 @@ NODES_FILE = "nodes_LFPG.xlsx" if LFPG_LAYOUT else "nodes.xlsx"
 EDGES_FILE = "edges_LFPG.xlsx" if LFPG_LAYOUT else "edges.xlsx"
 
 # Simulation settings
-SIMULATION_TIME = 100
+SIMULATION_TIME = 300
 PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
 DELTA_T = 0.5  # Time step for planning
 DT = 0.1  # Time step for movement
@@ -272,6 +272,9 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     where:
       - Actual Completion Time is measured from the moment a task is generated until the aircraft is dropped off.
       - Ideal Completion Time is computed via a simple single-agent A* search from the task's start to goal.
+      
+    Additionally, this version tracks the total time each tug spends in each of the four states:
+      "idle", "moving_to_task", "executing", "to_depot", and computes the average time per state across all tugs.
     """
     # --- KPI Global Variables ---
     total_collisions = 0
@@ -321,6 +324,9 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         idle_times[tug.id] = 0
         idle_time_history[tug.id] = []
 
+    # Initialize state time tracking for each tug (for "idle", "moving_to_task", "executing", "to_depot")
+    tug_state_times = {tug.id: {"idle": 0, "moving_to_task": 0, "executing": 0, "to_depot": 0} for tug in atc.tug_list}
+
     # Initialize Auctioneer
     auctioneer = Auctioneer(atc.tug_list)
 
@@ -338,7 +344,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     print("Simulation Started")
     while running:
         t = round(t, 2)
-        # print(f"\n--- Time {t} ---")
+
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
             if info["release_time"] <= t:
@@ -396,11 +402,6 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                                             [departure_depot, arrival_depot], 
                                             gamma=GAMMA, alpha=ALPHA, beta=BETA)
                 print(f"Tug {tug.id}: status = {tug.status}, coupled = {tug.coupled}, position = {tug.position}")
-                # if hasattr(tug, 'path_to_goal'):
-                    # print(f"  Current path: {tug.path_to_goal}")
-                    # print(f"  Current goal: {tug.goal}")
-                # else:
-                    # print("  Current path: None")
         
         # --- Collision Detection KPI ---
         current_states = {}
@@ -445,7 +446,6 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         
         # --- Run Planning ---
         if (t/DELTA_T).is_integer():
-            # print("Planning")
             if PLANNER == "Independent":
                 for tug in atc.tug_list:
                     if tug.status in ["moving_to_task", "executing", "to_depot"]:
@@ -466,14 +466,13 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 tug.move(DT, t, atc.constraints_at_t, LFPG_LAYOUT, departure_depot, arrival_depot)
         
         # --- KPI: Task Completion & Delay Calculation ---
-                
         for tug in atc.tug_list:
             current_node = getattr(tug, 'current_node', tug.start)
 
             # When a tug is assigned a task
             if prev_status[tug.id] == "idle" and tug.status == "moving_to_task":
                 total_task_start_times[tug.id] = t
-                task_details[tug.id] = tug.current_task  # this stores the flight id of the task
+                task_details[tug.id] = tug.current_task  # stores the flight id of the task
             
             # Record execution start time when a tug transitions from moving_to_task to executing:
             if prev_status[tug.id] == "moving_to_task" and tug.status == "executing":
@@ -498,23 +497,18 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     total_tasks_completed += 1
                     print(f"Tug {tug.id} executed task in {exec_duration} sec, nodes traversed: {traveled_distance}")
                     
-                    #TODO: delay correct uitrekenen
                     print(f'task details: {task_details}')
                     flight_id = task_details[tug.id] 
                     print(f'Task ID: {task_id}')
                     task = FlightTask.get_task_by_id(flight_id)
                     print(f'task object: {task}')
 
-                    # ACTUAL TIME: 
                     total_duration_passengers = t - task.spawn_time
-
-                    # IDEAL TIME:
                     success, path = simple_single_agent_astar(nodes_dict, task.start_node, task.goal_node, heuristics, task.spawn_time)
                     if success and path:
                         ideal_time = path[-1][1] - path[0][1]
                     else:
-                        ideal_time = None # should not be possible
-
+                        ideal_time = None
                     delay_value = total_duration_passengers - ideal_time
                     delays.append(delay_value)
                     print(f"Tug {tug.id} delay: actual {total_duration_passengers:.2f} s, ideal {ideal_time:.2f} s, delay {delay_value:.2f} s")
@@ -524,11 +518,9 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
             
             # When total task completes (to_depot -> idle), record total task time:
             if prev_status[tug.id] == "to_depot" and tug.status == "idle": 
-                #TODO: dit moet nog worden aangepast dat het ook mogelijk is om van to_depod naar to_task direct te gaan. 
                 if tug.id in total_task_start_times:
                     total_duration = t - total_task_start_times[tug.id]
                     total_task_completion_times.append(total_duration)
-                    # print(f"Tug {tug.id} completed total task in {total_duration} sec")
                     del total_task_start_times[tug.id]
 
             prev_status[tug.id] = tug.status
@@ -555,6 +547,11 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         for tug in atc.tug_list:
             idle_time_history[tug.id].append(idle_times[tug.id])
         
+        # --- Accumulate State Time for Each Tug ---
+        for tug in atc.tug_list:
+            if tug.status in tug_state_times[tug.id]:
+                tug_state_times[tug.id][tug.status] += DT
+        
         t = t + DT
 
     avg_execution_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
@@ -576,7 +573,21 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     else:
         print("No delay data recorded.")
 
-    # Return KPI metrics along with idle time and time histories.
+    # --- Print Tug State Time Summary ---
+    print("\n----- Tug State Time Summary -----")
+    for tug_id, states in tug_state_times.items():
+        print(f"Tug {tug_id} state times: {states}")
+    avg_state_times = {"idle": 0, "moving_to_task": 0, "executing": 0, "to_depot": 0}
+    for times in tug_state_times.values():
+        for state in avg_state_times:
+            avg_state_times[state] += times[state]
+    num_tugs = len(tug_state_times)
+    for state in avg_state_times:
+        avg_state_times[state] /= num_tugs
+    print("\n----- Average State Times -----")
+    print(avg_state_times)
+    
+    # Return KPI metrics along with idle time, time histories, and state times.
     return {
          "collisions": total_collisions,
          "tasks_completed": total_tasks_completed,
@@ -585,7 +596,9 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
          "avg_distance": avg_distance,
          "delays": delays,
          "idle_time_history": idle_time_history,
-         "time_history": time_history
+         "time_history": time_history,
+         "tug_state_times": tug_state_times,
+         "avg_state_times": avg_state_times
     }
 
 
@@ -608,9 +621,9 @@ if __name__ == "__main__":
     plt.show()
 
 
-# New main function to run simulation and plot idle time histories
-if __name__ == "__main__":
-    run_simulation()
+# # New main function to run simulation and plot idle time histories
+# if __name__ == "__main__":
+#     run_simulation()
 
 
 '''idle time'''
