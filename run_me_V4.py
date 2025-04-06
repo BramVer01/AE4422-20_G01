@@ -78,10 +78,10 @@ DT = 0.1  # Time step for movement
 
 #Visualization (can also be changed)
 plot_graph = False    #show graph representation in NetworkX
-visualization = False        #pygame visualization
+visualization = True        #pygame visualization
 visualization_speed = 0.1 #set at 0.1 as default
 
-task_interval = 3    # New: generate a task every 5 seconds
+task_interval = 2    # New: generate a task every x seconds
 total_tugs = 8       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
@@ -261,22 +261,8 @@ def generate_flight_task(flight_id, t, gate_status):
 
 
 
-def run_simulation(visualization_speed=visualization_speed, task_interval=task_interval, 
-                   total_tugs=total_tugs, simulation_time=SIMULATION_TIME):
-    """
-    Main simulation function that runs the airport tug simulation, records various KPIs,
-    and computes the Delay KPI as:
-    
-         Delay = Actual Completion Time - Ideal Completion Time
-        
-    where:
-      - Actual Completion Time is measured from the moment a task is generated until the aircraft is dropped off.
-      - Ideal Completion Time is computed via a simple single-agent A* search from the task's start to goal.
-      
-    Additionally, this version tracks the total time each tug spends in each of the four states:
-      "idle", "moving_to_task", "executing", "to_depot", computes the average time per state,
-    and records the battery percentage of the tugs over time.
-    """
+def run_simulation(visualization_speed, task_interval, 
+                   total_tugs, simulation_time):
     # --- KPI Global Variables ---
     total_collisions = 0
     task_completion_times = []         # Execution time (from moving_to_task -> executing to to_depot)
@@ -341,7 +327,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     escape_pressed = False
     time_end = simulation_time
     t = 0
-    task_counter = 0
+    task_counter = 0  # Counts tasks generated
     gate_status = {}
 
     print("Simulation Started")
@@ -502,7 +488,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                     
                     print(f'task details: {task_details}')
                     flight_id = task_details[tug.id] 
-                    print(f'Task ID: {task_id}')
+                    print(f'Task ID: {flight_id}')
                     task = FlightTask.get_task_by_id(flight_id)
                     print(f'task object: {task}')
 
@@ -580,6 +566,13 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     else:
         print("No delay data recorded.")
 
+    # --- Calculate Difference between Tasks Generated and Tasks Completed ---
+    tasks_difference = task_counter - total_tasks_completed
+    print("\n----- Task Generation Difference -----")
+    print("Tasks Generated:", task_counter)
+    print("Tasks Completed:", total_tasks_completed)
+    print("Difference (Generated - Completed):", tasks_difference)
+
     # --- Print Tug State Time Summary ---
     print("\n----- Tug State Time Summary -----")
     for tug_id, states in tug_state_times.items():
@@ -599,6 +592,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     return {
          "collisions": total_collisions,
          "tasks_completed": total_tasks_completed,
+         "tasks_difference": tasks_difference,  # New KPI: difference between tasks generated and completed
          "avg_execution_time": avg_execution_time,
          "avg_total_time": avg_total_time,
          "avg_distance": avg_distance,
@@ -611,103 +605,390 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
     }
 
 
-'''delay vs num tugs and task interval'''
-if __name__ == "__main__":
-    import numpy as np
+# run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+
+'''Testing normality of KPIs'''
+def plot_all_distributions(kpi_data_dict):
     import matplotlib.pyplot as plt
-    import pandas as pd
-    from scipy import stats
-
-    # Simulation settings
-    SIMULATION_TIME = 200
-    PLANNER = "Prioritized"   # (Assumed to be set globally in run_simulation)
-    DELTA_T = 0.5             # Time step for planning
-    DT = 0.1                  # Time step for movement
-
-    # Visualization settings (disabled for batch runs)
-    plot_graph = False        # Show graph representation in NetworkX
-    visualization = False     # Pygame visualization
-    visualization_speed = 0.1
-
-    # Define the task intervals to test (from 1 to 10 seconds)
-    task_intervals = list(range(1, 11, 2))  # [1, 2, ..., 10]
-
-    # Define the different numbers of tugs to test
-    tug_counts = [4, 6, 8, 10]
-
-    # Number of simulation runs per (task_interval, tug_count) combination
-    n_runs_per_combo = 50
-
-    # Define the delay threshold (in seconds) for our hypothesis.
-    # Hypothesis: With 95% confidence, the average delay is below this threshold.
-    delay_threshold = 30.0
-
-    # Helper function: compute mean and 95% confidence interval for a given data list.
-    def compute_mean_ci(data, confidence=0.95):
-        a = np.array(data)
-        # Remove NaN values (in case no delays were recorded)
-        a = a[~np.isnan(a)]
-        if len(a) == 0:
-            return np.nan, np.nan
-        mean = np.mean(a)
-        std_err = stats.sem(a)
-        h = std_err * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
-        return mean, h
-
-    # Containers to store aggregated results
-    results_summary = []  # List of dicts to form a summary DataFrame later.
-    plot_data = {}  # Key: tug_count, Value: dict with task_intervals, avg_delays, CIs
-
-    print("Running simulation batch for varying task intervals and tug counts...")
-    for tug_count in tug_counts:
-        avg_delays_for_ti = []
-        ci_for_ti = []
-        for ti in task_intervals:
-            run_delays = []
-            print(f"\nTugs: {tug_count} | Task Interval: {ti} s")
-            for run in range(n_runs_per_combo):
-                print(f"  Run {run+1}/{n_runs_per_combo} ...", end="\r")
-                results = run_simulation(visualization_speed, ti, tug_count, SIMULATION_TIME)
-                # Compute the average delay for the current run (if delay data exists)
-                if results["delays"]:
-                    run_avg_delay = np.mean(results["delays"])
-                else:
-                    run_avg_delay = np.nan
-                run_delays.append(run_avg_delay)
-            mean_delay, ci = compute_mean_ci(run_delays)
-            avg_delays_for_ti.append(mean_delay)
-            ci_for_ti.append(ci)
-            meets = (mean_delay + ci) < delay_threshold
-            results_summary.append({
-                "Tug Count": tug_count,
-                "Task Interval": ti,
-                "Mean Delay": mean_delay,
-                "95% CI": ci,
-                "Meets Threshold": meets
-            })
-            print(f"  -> Mean Delay = {mean_delay:.2f} ± {ci:.2f} s, Meets Threshold? {meets}")
-        plot_data[tug_count] = {
-            "task_intervals": task_intervals,
-            "avg_delays": avg_delays_for_ti,
-            "cis": ci_for_ti
-        }
-
-    # Plot: Average Delay vs. Task Interval with 95% Confidence Intervals for each tug count
-    plt.figure(figsize=(12, 8))
-    for tug_count, data in plot_data.items():
-        plt.errorbar(data["task_intervals"], data["avg_delays"], yerr=data["cis"], fmt='o-', capsize=5,
-                     label=f"{tug_count} Tugs")
-    plt.axhline(y=delay_threshold, color='red', linestyle='--', label=f"Delay Threshold ({delay_threshold} s)")
-    plt.xlabel("Task Interval (s)")
-    plt.ylabel("Average Delay (s)")
-    plt.title("Effect of Task Interval on Average Delay for Different Tug Counts")
-    plt.legend()
+    import numpy as np
+    from scipy.stats import norm
+    num_plots = len(kpi_data_dict)
+    cols = 3
+    rows = (num_plots + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+    axes = axes.flatten() if num_plots > 1 else [axes]
+    for i, (name, data) in enumerate(kpi_data_dict.items()):
+        ax = axes[i]
+        ax.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
+        mu, std = np.mean(data), np.std(data)
+        xmin, xmax = ax.get_xlim()
+        x = np.linspace(xmin, xmax, 100)
+        p = norm.pdf(x, mu, std)
+        ax.plot(x, p, 'k', linewidth=2)
+        ax.set_title(f"{name}\nMean: {mu:.2f}, Std: {std:.2f}")
+        ax.set_xlabel(name)
+        ax.set_ylabel("Probability Density")
+        ax.grid(True)
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+    plt.tight_layout()
     plt.show()
 
-    # Create a summary DataFrame of the simulation results
-    summary_df = pd.DataFrame(results_summary)
-    print("\nSummary of Simulation Results:")
-    print(summary_df)
+if __name__ == "__main__":
+    visualization = False
+    num_runs = 100  # Adjust the number of simulation runs as needed
+    collisions_list = []
+    tasks_completed_list = []
+    avg_execution_time_list = []
+    avg_total_time_list = []
+    avg_distance_list = []
+    cpu_runtime_list = []
+    delay_list = []  # New list for average delay KPI
+    error_count = 0
+    tug_count = 8
+    task_interval = 3
+
+    for i in range(num_runs):
+        print(f"\n--- Simulation run {i+1}/{num_runs} ---")
+        try:
+            kpi_results = run_simulation(visualization_speed, task_interval, tug_count, SIMULATION_TIME)
+            collisions_list.append(kpi_results["collisions"])
+            tasks_completed_list.append(kpi_results["tasks_completed"])
+            avg_execution_time_list.append(kpi_results["avg_execution_time"])
+            avg_total_time_list.append(kpi_results["avg_total_time"])
+            avg_distance_list.append(kpi_results["avg_distance"])
+            if "cpu_runtime" in kpi_results:
+                cpu_runtime_list.append(kpi_results["cpu_runtime"])
+            # Compute average delay for the simulation run
+            if kpi_results["delays"]:
+                avg_delay = sum(kpi_results["delays"]) / len(kpi_results["delays"])
+            else:
+                avg_delay = 0
+            delay_list.append(avg_delay)
+        except Exception as e:
+            error_count += 1
+            print(f"Error in simulation run {i+1}: {e}")
+
+    error_rate = error_count / num_runs
+    print("\n=== Overall Error Rate ===")
+    print(f"Error Rate: {error_rate * 100:.2f}% ({error_count}/{num_runs} runs encountered errors)")
+    print("-----")
+
+    if collisions_list:
+        print("\n=== Normality Test Results for KPIs ===")
+        test_normality(collisions_list, "Collisions")
+        test_normality(tasks_completed_list, "Tasks Completed")
+        test_normality(avg_execution_time_list, "Average Execution Time")
+        test_normality(avg_total_time_list, "Average Total Task Time")
+        test_normality(avg_distance_list, "Average Task Distance")
+        test_normality(delay_list, "Average Delay")
+        if cpu_runtime_list:
+            test_normality(cpu_runtime_list, "CPU Runtime")
+
+        # Combine KPI data into one dictionary for a single comprehensive plot
+        kpi_dict = {
+            "Collisions": collisions_list,
+            "Tasks Completed": tasks_completed_list,
+            "Avg Execution Time": avg_execution_time_list,
+            "Avg Total Task Time": avg_total_time_list,
+            "Avg Task Distance": avg_distance_list,
+            "Avg Delay": delay_list
+        }
+        if cpu_runtime_list:
+            kpi_dict["CPU Runtime"] = cpu_runtime_list
+
+        plot_all_distributions(kpi_dict)
+    else:
+        print("No successful simulation runs to analyze KPIs.")
+
+# '''SIMULATION DASHBOARD'''
+# if __name__ == "__main__":
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+#     import matplotlib.gridspec as gridspec
+#     from scipy import stats
+
+#     # Simulation settings
+#     SIMULATION_TIME = 300
+#     PLANNER = "Prioritized"  # Choose which planner to use (Independent, Prioritized, CBS)
+#     DELTA_T = 0.5            # Time step for planning
+#     DT = 0.1                 # Time step for movement
+
+#     # Visualization settings (disabled for batch runs)
+#     plot_graph = False       # Show graph representation in NetworkX
+#     visualization = False    # Pygame visualization
+#     visualization_speed = 0.1
+
+#     task_interval = 3        # Generate a task every 3 seconds
+#     total_tugs = 5           # Total number of tugs
+
+#     n_runs = 10  # Number of simulation runs
+
+#     # Lists to collect scalar KPIs from each run
+#     collisions_list = []
+#     tasks_completed_list = []
+#     avg_execution_time_list = []
+#     avg_total_time_list = []
+#     avg_distance_list = []
+#     avg_delay_list = []  # For each run, we'll store the average delay (if available)
+
+#     # Dictionary to collect state times (per run) for each state
+#     state_times_dict = {"idle": [], "moving_to_task": [], "executing": [], "to_depot": []}
+
+#     # Dictionaries to collect time-series data (each key will have a list of arrays, one per run)
+#     idle_time_series = {}    # key: tug_id, value: list of idle time arrays (per time step)
+#     battery_time_series = {} # key: tug_id, value: list of battery percentage arrays (per time step)
+#     common_time_history = None
+
+#     # Collect all individual delay values (from all runs)
+#     all_delays = []
+
+#     print("Running simulation batch...")
+#     for run in range(n_runs):
+#         print(f"Run {run+1}/{n_runs}")
+#         results = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+        
+#         collisions_list.append(results["collisions"])
+#         tasks_completed_list.append(results["tasks_completed"])
+#         avg_execution_time_list.append(results["avg_execution_time"])
+#         avg_total_time_list.append(results["avg_total_time"])
+#         avg_distance_list.append(results["avg_distance"])
+#         if results["delays"]:
+#             run_avg_delay = np.mean(results["delays"])
+#             avg_delay_list.append(run_avg_delay)
+#             all_delays.extend(results["delays"])
+#         else:
+#             avg_delay_list.append(np.nan)
+        
+#         for state in state_times_dict.keys():
+#             state_times_dict[state].append(results["avg_state_times"][state])
+        
+#         # For time series, assume each run has the same time_history
+#         if common_time_history is None:
+#             common_time_history = results["time_history"]
+#         for tug_id, idle_list in results["idle_time_history"].items():
+#             if tug_id not in idle_time_series:
+#                 idle_time_series[tug_id] = []
+#             idle_time_series[tug_id].append(np.array(idle_list))
+#         for tug_id, batt_list in results["battery_history"].items():
+#             if tug_id not in battery_time_series:
+#                 battery_time_series[tug_id] = []
+#             battery_time_series[tug_id].append(np.array(batt_list))
+    
+#     # Function to compute mean and 95% confidence interval
+#     def compute_mean_ci(data, confidence=0.95):
+#         a = np.array(data)
+#         mean = np.nanmean(a)
+#         std_err = stats.sem(a, nan_policy='omit')
+#         h = std_err * stats.t.ppf((1 + confidence) / 2., len(a)-1)
+#         return mean, h
+
+#     # Compute aggregated KPIs
+#     collisions_mean, collisions_ci = compute_mean_ci(collisions_list)
+#     tasks_completed_mean, tasks_completed_ci = compute_mean_ci(tasks_completed_list)
+#     avg_exec_mean, avg_exec_ci = compute_mean_ci(avg_execution_time_list)
+#     avg_total_mean, avg_total_ci = compute_mean_ci(avg_total_time_list)
+#     avg_distance_mean, avg_distance_ci = compute_mean_ci(avg_distance_list)
+#     avg_delay_mean, avg_delay_ci = compute_mean_ci(avg_delay_list)
+
+#     # Compute aggregated state times
+#     state_means = {}
+#     state_cis = {}
+#     for state, values in state_times_dict.items():
+#         m, ci = compute_mean_ci(values)
+#         state_means[state] = m
+#         state_cis[state] = ci
+
+#     # Compute average and CI for idle time and battery time series (per tug)
+#     idle_time_avg = {}
+#     idle_time_ci = {}
+#     for tug_id, arrays in idle_time_series.items():
+#         data = np.vstack(arrays)  # shape: (n_runs, time_steps)
+#         mean_series = np.mean(data, axis=0)
+#         std_err_series = stats.sem(data, axis=0)
+#         ci_series = std_err_series * stats.t.ppf((1+0.95)/2., n_runs-1)
+#         idle_time_avg[tug_id] = mean_series
+#         idle_time_ci[tug_id] = ci_series
+
+#     battery_time_avg = {}
+#     battery_time_ci = {}
+#     for tug_id, arrays in battery_time_series.items():
+#         data = np.vstack(arrays)
+#         mean_series = np.mean(data, axis=0)
+#         std_err_series = stats.sem(data, axis=0)
+#         ci_series = std_err_series * stats.t.ppf((1+0.95)/2., n_runs-1)
+#         battery_time_avg[tug_id] = mean_series
+#         battery_time_ci[tug_id] = ci_series
+
+#     # Build dashboard plots using GridSpec
+#     fig = plt.figure(constrained_layout=True, figsize=(12, 10))
+#     gs = fig.add_gridspec(3, 2)
+
+#     # Subplot 1: Idle Time History (Mean with 95% CI)
+#     ax1 = fig.add_subplot(gs[0, 0])
+#     for tug_id, avg_series in idle_time_avg.items():
+#         ci_series = idle_time_ci[tug_id]
+#         ax1.plot(common_time_history, avg_series, label=f"Tug {tug_id}")
+#         ax1.fill_between(common_time_history, avg_series - ci_series, avg_series + ci_series, alpha=0.2)
+#     ax1.set_xlabel("Simulation Time (s)")
+#     ax1.set_ylabel("Accumulated Idle Time (s)")
+#     ax1.set_title("Idle Time of Each Tug (Mean ± 95% CI)")
+#     ax1.legend(fontsize='small')
+
+#     # Subplot 2: Battery Percentage History (Mean with 95% CI)
+#     ax2 = fig.add_subplot(gs[0, 1])
+#     for tug_id, avg_series in battery_time_avg.items():
+#         ci_series = battery_time_ci[tug_id]
+#         ax2.plot(common_time_history, avg_series, label=f"Tug {tug_id}")
+#         ax2.fill_between(common_time_history, avg_series - ci_series, avg_series + ci_series, alpha=0.2)
+#     ax2.set_xlabel("Simulation Time (s)")
+#     ax2.set_ylabel("Battery Percentage (%)")
+#     ax2.set_title("Battery Percentage Over Time (Mean ± 95% CI)")
+#     ax2.legend(fontsize='small')
+
+#     # Subplot 3: Tug State Times (Bar Chart with error bars)
+#     ax3 = fig.add_subplot(gs[1, 0])
+#     states = list(state_means.keys())
+#     means = [state_means[s] for s in states]
+#     cis = [state_cis[s] for s in states]
+#     ax3.bar(states, means, yerr=cis, capsize=5, color='skyblue')
+#     ax3.set_xlabel("Tug States")
+#     ax3.set_ylabel("Average Time (s)")
+#     ax3.set_title("Average Tug State Times (Mean ± 95% CI)")
+
+#     # Subplot 4: Delay Histogram (Aggregated from all runs)
+#     ax4 = fig.add_subplot(gs[1, 1])
+#     if all_delays:
+#         ax4.hist(all_delays, bins=20, edgecolor='black', alpha=0.7)
+#         ax4.set_xlabel("Delay (s)")
+#         ax4.set_ylabel("Frequency")
+#         ax4.set_title("Delay Distribution Over All Runs")
+#     else:
+#         ax4.text(0.5, 0.5, "No Delay Data", ha='center', va='center', fontsize=12)
+#         ax4.set_axis_off()
+
+#     # Subplot 5: KPIs Table (Aggregated Metrics with Confidence Intervals)
+#     ax5 = fig.add_subplot(gs[2, :])
+#     ax5.axis('off')
+#     kpi_labels = ["Total Collisions", "Tasks Completed", "Avg Execution Time (s)",
+#                   "Avg Total Task Time (s)", "Avg Task Distance", "Avg Delay (s)"]
+#     kpi_means = [collisions_mean, tasks_completed_mean, avg_exec_mean, avg_total_mean, avg_distance_mean, avg_delay_mean]
+#     kpi_cis = [collisions_ci, tasks_completed_ci, avg_exec_ci, avg_total_ci, avg_distance_ci, avg_delay_ci]
+#     kpi_table_data = []
+#     for label, mean, ci in zip(kpi_labels, kpi_means, kpi_cis):
+#         kpi_table_data.append([label, f"{mean:.2f} ± {ci:.2f}"])
+#     table = ax5.table(cellText=kpi_table_data, colLabels=["KPI", "Mean ± 95% CI"],
+#                       cellLoc='center', loc='center')
+#     table.auto_set_font_size(False)
+#     table.set_fontsize(12)
+#     table.scale(1, 2)
+#     ax5.set_title(f"Aggregated Simulation KPIs ({n_runs} Runs)", fontweight="bold", fontsize=14)
+
+#     plt.suptitle(f"Simulation Dashboard: {n_runs} Runs with Averages and 95% Confidence Intervals", fontsize=18, fontweight="bold")
+#     plt.show()
+
+
+
+
+
+
+# '''delay vs num tugs and task interval'''
+# if __name__ == "__main__":
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+#     import pandas as pd
+#     from scipy import stats
+
+#     # Simulation settings
+#     SIMULATION_TIME = 200
+#     PLANNER = "Prioritized"   # (Assumed to be set globally in run_simulation)
+#     DELTA_T = 0.5             # Time step for planning
+#     DT = 0.1                  # Time step for movement
+
+#     # Visualization settings (disabled for batch runs)
+#     plot_graph = False        # Show graph representation in NetworkX
+#     visualization = False     # Pygame visualization
+#     visualization_speed = 0.1
+
+#     # Define the task intervals to test (from 1 to 10 seconds)
+#     task_intervals = list(range(1, 11, 2))  # [1, 2, ..., 10]
+
+#     # Define the different numbers of tugs to test
+#     tug_counts = [4, 6, 8, 10]
+
+#     # Number of simulation runs per (task_interval, tug_count) combination
+#     n_runs_per_combo = 50
+
+#     # Define the delay threshold (in seconds) for our hypothesis.
+#     # Hypothesis: With 95% confidence, the average delay is below this threshold.
+#     delay_threshold = 30.0
+
+#     # Helper function: compute mean and 95% confidence interval for a given data list.
+#     def compute_mean_ci(data, confidence=0.95):
+#         a = np.array(data)
+#         # Remove NaN values (in case no delays were recorded)
+#         a = a[~np.isnan(a)]
+#         if len(a) == 0:
+#             return np.nan, np.nan
+#         mean = np.mean(a)
+#         std_err = stats.sem(a)
+#         h = std_err * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
+#         return mean, h
+
+#     # Containers to store aggregated results
+#     results_summary = []  # List of dicts to form a summary DataFrame later.
+#     plot_data = {}  # Key: tug_count, Value: dict with task_intervals, avg_delays, CIs
+
+#     print("Running simulation batch for varying task intervals and tug counts...")
+#     for tug_count in tug_counts:
+#         avg_delays_for_ti = []
+#         ci_for_ti = []
+#         for ti in task_intervals:
+#             run_delays = []
+#             print(f"\nTugs: {tug_count} | Task Interval: {ti} s")
+#             for run in range(n_runs_per_combo):
+#                 print(f"  Run {run+1}/{n_runs_per_combo} ...", end="\r")
+#                 results = run_simulation(visualization_speed, ti, tug_count, SIMULATION_TIME)
+#                 # Compute the average delay for the current run (if delay data exists)
+#                 if results["delays"]:
+#                     run_avg_delay = np.mean(results["delays"])
+#                 else:
+#                     run_avg_delay = np.nan
+#                 run_delays.append(run_avg_delay)
+#             mean_delay, ci = compute_mean_ci(run_delays)
+#             avg_delays_for_ti.append(mean_delay)
+#             ci_for_ti.append(ci)
+#             meets = (mean_delay + ci) < delay_threshold
+#             results_summary.append({
+#                 "Tug Count": tug_count,
+#                 "Task Interval": ti,
+#                 "Mean Delay": mean_delay,
+#                 "95% CI": ci,
+#                 "Meets Threshold": meets
+#             })
+#             print(f"  -> Mean Delay = {mean_delay:.2f} ± {ci:.2f} s, Meets Threshold? {meets}")
+#         plot_data[tug_count] = {
+#             "task_intervals": task_intervals,
+#             "avg_delays": avg_delays_for_ti,
+#             "cis": ci_for_ti
+#         }
+
+#     # Plot: Average Delay vs. Task Interval with 95% Confidence Intervals for each tug count
+#     plt.figure(figsize=(12, 8))
+#     for tug_count, data in plot_data.items():
+#         plt.errorbar(data["task_intervals"], data["avg_delays"], yerr=data["cis"], fmt='o-', capsize=5,
+#                      label=f"{tug_count} Tugs")
+#     plt.axhline(y=delay_threshold, color='red', linestyle='--', label=f"Delay Threshold ({delay_threshold} s)")
+#     plt.xlabel("Task Interval (s)")
+#     plt.ylabel("Average Delay (s)")
+#     plt.title("Effect of Task Interval on Average Delay for Different Tug Counts")
+#     plt.legend()
+#     plt.show()
+
+#     # Create a summary DataFrame of the simulation results
+#     summary_df = pd.DataFrame(results_summary)
+#     print("\nSummary of Simulation Results:")
+#     print(summary_df)
 
 
 
@@ -1052,61 +1333,6 @@ if __name__ == "__main__":
 # # New main function to run simulation and plot idle time histories
 # if __name__ == "__main__":
 #     run_simulation()
-
-
-
-
-# '''Testing normality of KPIs'''
-# if __name__ == "__main__":
-#     visualization = True
-#     num_runs = 10  # Adjust the number of simulation runs as needed
-#     collisions_list = []
-#     tasks_completed_list = []
-#     avg_execution_time_list = []
-#     avg_total_time_list = []
-#     avg_distance_list = []
-#     cpu_runtime_list = []
-#     error_count = 0
-
-#     for i in range(num_runs):
-#         print(f"\n--- Simulation run {i+1}/{num_runs} ---")
-#         try:
-#             kpi_results = run_simulation()  # Assumes run_simulation is defined and uses global defaults
-#             collisions_list.append(kpi_results["collisions"])
-#             tasks_completed_list.append(kpi_results["tasks_completed"])
-#             avg_execution_time_list.append(kpi_results["avg_execution_time"])
-#             avg_total_time_list.append(kpi_results["avg_total_time"])
-#             avg_distance_list.append(kpi_results["avg_distance"])
-#             cpu_runtime_list.append(kpi_results["cpu_runtime"])
-#         except Exception as e:
-#             error_count += 1
-#             print(f"Error in simulation run {i+1}: {e}")
-#             # Continue with next simulation run
-
-#     error_rate = error_count / num_runs
-#     print("\n=== Overall Error Rate ===")
-#     print(f"Error Rate: {error_rate*100:.2f}% ({error_count}/{num_runs} runs encountered errors)")
-#     print("-----")
-
-#     # Only perform tests and plots if we have at least one successful run
-#     if collisions_list:
-#         print("\n=== Normality Test Results for KPIs ===")
-#         test_normality(collisions_list, "Collisions")
-#         test_normality(tasks_completed_list, "Tasks Completed")
-#         test_normality(avg_execution_time_list, "Average Execution Time")
-#         test_normality(avg_total_time_list, "Average Total Task Time")
-#         test_normality(avg_distance_list, "Average Task Distance")
-#         test_normality(cpu_runtime_list, "CPU Runtime")
-
-#         print("\n=== Plotting KPI Distributions ===")
-#         plot_distribution(collisions_list, "Collisions")
-#         plot_distribution(tasks_completed_list, "Tasks Completed")
-#         plot_distribution(avg_execution_time_list, "Average Execution Time")
-#         plot_distribution(avg_total_time_list, "Average Total Task Time")
-#         plot_distribution(avg_distance_list, "Average Task Distance")
-#         plot_distribution(cpu_runtime_list, "CPU Runtime")
-#     else:
-#         print("No successful simulation runs to analyze KPIs.")
 
 
 
