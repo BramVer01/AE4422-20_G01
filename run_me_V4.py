@@ -704,11 +704,16 @@ def plot_heat_map(simulation_results):
 
     # Final formatting
     plt.title("Tug Activity Heat Map with Network Edges", fontsize=16)
-    plt.xlabel("X Position (meters)", fontsize=12)
-    plt.ylabel("Y Position (meters)", fontsize=12)
-    plt.grid(True, alpha=0.3, zorder=0)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
+    plt.xticks([])
+    plt.yticks([])
+    plt.gca().spines['top'].set_visible(False)
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['left'].set_visible(False)
+    plt.gca().spines['bottom'].set_visible(False)
+    plt.xlabel("")
+    plt.ylabel("")
     plt.show()
 
 
@@ -740,7 +745,7 @@ def average_node_activity(n_runs, **sim_kwargs):
 
 def main():
     # Batch parameters
-    N_RUNS = 10
+    N_RUNS = 20
     sim_kwargs = {
         "visualization_speed": 0.0,
         "task_interval": 2,
