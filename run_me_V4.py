@@ -604,24 +604,29 @@ def run_simulation(visualization_speed, task_interval,
          "avg_state_times": avg_state_times
     }
 
+
+
+
+
 '''Impact of Fleet Size and Task Interval on Task Completion Rate'''
+# Updated main function: Impact of Fleet Size and Task Interval on Task Completion Rate
+
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy import stats
+
 if __name__ == "__main__":
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    from scipy import stats
-
     # Simulation settings
-    SIMULATION_TIME   = 100    # simulation duration in timesteps
-    DELTA_T           = 0.5    # planning timestep (global)
-    DT                = 0.1    # movement timestep (global)
+    SIMULATION_TIME   = 100
+    DELTA_T           = 0.5
+    DT                = 0.1
 
-    # batch‐run parameters
+    # Batch parameters
     tug_counts        = [4, 6, 8, 10]
     task_intervals    = [1, 3, 5, 7, 9]
-    n_runs_per_combo  = 10
+    n_runs_per_combo  = 10  # increase replications for stability
 
-    # helper: mean + 95% CI
     def mean_ci(data, confidence=0.95):
         a    = np.array(data, dtype=float)
         mean = np.nanmean(a)
@@ -629,15 +634,14 @@ if __name__ == "__main__":
         h    = se * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
         return mean, h
 
-    # containers for plotting and summary
     plot_data = {n: {"ti": [], "mean_rate": [], "ci_rate": []} for n in tug_counts}
     summary   = []
 
-    print("Running completion‐rate batch over fleet sizes and task intervals...")
+    print("Running completion-rate batch over fleet sizes and task intervals...")
     for n in tug_counts:
         for ti in task_intervals:
             rates = []
-            print(f"  Testing {n} tugs, interval={ti}s...")
+            print(f"  Testing {n} tugs, task interval={ti}s...")
             for _ in range(n_runs_per_combo):
                 res = run_simulation(
                     visualization_speed=0.0,
@@ -646,8 +650,13 @@ if __name__ == "__main__":
                     simulation_time=SIMULATION_TIME
                 )
                 completed = res["tasks_completed"]
-                generated = completed + res["tasks_difference"]
+                # Derive total tasks generated using tasks_difference
+                generated = completed + res.get("tasks_difference", 0)
+                # Ensure generated >= completed
+                generated = max(generated, completed)
                 rate = completed / generated if generated > 0 else np.nan
+                # Clamp to [0,1]
+                rate = np.clip(rate, 0.0, 1.0)
                 rates.append(rate)
 
             mean_rate, ci_rate = mean_ci(rates)
@@ -658,12 +667,12 @@ if __name__ == "__main__":
             summary.append({
                 "Tugs": n,
                 "Task Interval": ti,
-                "Mean Rate": mean_rate,
+                "Mean Completion Rate": mean_rate,
                 "95% CI": ci_rate
             })
-            print(f"    → Rate = {mean_rate:.3f} ± {ci_rate:.3f}")
+            print(f"    → Completion Rate = {mean_rate:.3f} ± {ci_rate:.3f}")
 
-    # Plot completion rate vs task interval for each fleet size
+    # Plot completion rate vs. task interval for each fleet size
     plt.figure(figsize=(10, 6))
     for n in tug_counts:
         plt.errorbar(
@@ -681,7 +690,7 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    # Display summary table
+    # Summary table
     df = pd.DataFrame(summary)
     print("\nCompletion Rate Summary:")
     print(df.to_string(index=False))
