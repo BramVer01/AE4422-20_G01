@@ -635,21 +635,44 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
 def plot_heat_map(simulation_results):
-    """Plots a heat map of node activity from simulation results with enhanced midrange contrast."""
-    plt.figure(figsize=(14, 10))
-    
-    # Extract data
+    """Plots a heat map of node activity with clearly visible network edges."""
+    # Extract layout
+    nodes_dict, edges_dict, _ = import_layout(NODES_FILE, EDGES_FILE)
+
+    # Extract activity data
     node_activity = simulation_results["node_activity"]
-    nodes_dict    = simulation_results["nodes_dict"]
     x = np.array([nodes_dict[n]["x_pos"] for n in nodes_dict])
     y = np.array([nodes_dict[n]["y_pos"] for n in nodes_dict])
-    activity = np.array([node_activity[n]       for n in nodes_dict])
-    
-    # Use PowerNorm to emphasize midrange
-    norm = mcolors.PowerNorm(gamma=0.5, vmin=activity.min(), vmax=activity.max())
-    
-    # Scatter with viridis (better midrange discrimination than 'hot')
+    activity = np.array([node_activity.get(n, 0)      for n in nodes_dict])
+
+    # Create figure
+    plt.figure(figsize=(14, 10))
+
+    # Plot network edges first, thicker and semi-transparent
+    for (u, v), props in edges_dict.items():
+        x0, y0 = nodes_dict[u]["x_pos"], nodes_dict[u]["y_pos"]
+        x1, y1 = nodes_dict[v]["x_pos"], nodes_dict[v]["y_pos"]
+        plt.plot(
+            [x0, x1], [y0, y1],
+            color="grey",
+            linewidth=1.5,
+            alpha=0.6,
+            zorder=0
+        )
+
+    # Color normalization using PowerNorm for enhanced midrange contrast
+    norm = mcolors.PowerNorm(gamma=0.5, vmin=activity.min()+1e-3, vmax=activity.max())
+
+    # Scatter plot of nodes on top of edges
     scatter = plt.scatter(
         x, y,
         c=activity,
@@ -658,62 +681,84 @@ def plot_heat_map(simulation_results):
         s=150,
         alpha=0.9,
         edgecolor='k',
-        linewidths=0.5,
-        zorder=2
+        linewidths=0.7,
+        zorder=1
     )
-    
-    # Color bar
+
+    # Add colorbar
     cbar = plt.colorbar(scatter, shrink=0.8)
     cbar.set_label('Node Activity Count', fontsize=12)
-    
-    # Node labels
-    for node_id, ax in nodes_dict.items():
-        plt.text(
-            ax["x_pos"],
-            ax["y_pos"],
-            str(int(node_id)),
-            ha='center',
-            va='center',
-            fontsize=7,
-            color='white' if node_activity[node_id] > activity.mean() else 'black',
-            alpha=0.8
-        )
-    
-    # Formatting
-    plt.title("Aircraft Tug Activity Heat Map (Enhanced Midrange Contrast)", fontsize=16)
+
+    # Label nodes with above-average activity
+    mean_act = np.mean(activity)
+    for node_id, props in nodes_dict.items():
+        count = node_activity.get(node_id, 0)
+        if count > mean_act:
+            plt.text(
+                props["x_pos"], props["y_pos"], str(int(node_id)),
+                ha='center', va='center',
+                fontsize=7,
+                color='white',
+                zorder=2
+            )
+
+    # Final formatting
+    plt.title("Tug Activity Heat Map with Network Edges", fontsize=16)
     plt.xlabel("X Position (meters)", fontsize=12)
     plt.ylabel("Y Position (meters)", fontsize=12)
-    plt.grid(True, alpha=0.3, zorder=1)
+    plt.grid(True, alpha=0.3, zorder=0)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()
 
 
+def average_node_activity(n_runs, **sim_kwargs):
+    """
+    Runs the simulation n_runs times and returns a results dict
+    where node_activity has been averaged across runs.
+    """
+    # Run first simulation to get the template
+    first = run_simulation(**sim_kwargs)
+    nodes = list(first["node_activity"].keys())
+    
+    # Initialize accumulator with first run
+    acc_activity = {node: first["node_activity"][node] for node in nodes}
+    
+    # Accumulate remaining runs
+    for _ in range(n_runs - 1):
+        res = run_simulation(**sim_kwargs)
+        for node, count in res["node_activity"].items():
+            acc_activity[node] += count
+    
+    # Compute average activity
+    avg_activity = {node: acc_activity[node] / n_runs for node in nodes}
+    
+    # Return a modified results dict with averaged node_activity
+    averaged = first.copy()
+    averaged["node_activity"] = avg_activity
+    return averaged
 
 def main():
-    # Run simulation with parameters
-    sim_results = run_simulation(
-        visualization_speed=0.1,
-        task_interval=2,
-        total_tugs=8,
-        simulation_time=300
-    )
-    
-    # Generate heat map
-    plot_heat_map(sim_results)
-    
-    # Print summary statistics
-    print("\nSimulation Summary:")
-    print(f"Total collisions: {sim_results['collisions']}")
-    print(f"Tasks completed: {sim_results['tasks_completed']}")
-    print(f"Average execution time: {sim_results['avg_execution_time']:.2f}s")
-    
-    # Node activity statistics
-    activity = sim_results["node_activity"].values()
-    print("\nNode Activity Statistics:")
-    print(f"Most active node: {max(sim_results['node_activity'], key=sim_results['node_activity'].get)}")
-    print(f"Total node visits: {sum(activity)}")
-    print(f"Average node visits: {np.mean(list(activity)):.1f}")
+    # Batch parameters
+    N_RUNS = 10
+    sim_kwargs = {
+        "visualization_speed": 0.0,
+        "task_interval": 2,
+        "total_tugs": 8,
+        "simulation_time": 300
+    }
+
+    # Compute averaged results
+    avg_results = average_node_activity(N_RUNS, **sim_kwargs)
+
+    # Plot heat map using averaged node activity
+    plot_heat_map(avg_results)
+
+    # Print summary
+    print(f"Averaged over {N_RUNS} runs:")
+    print(f"  Collisions: {avg_results['collisions']:.2f}")
+    print(f"  Tasks completed: {avg_results['tasks_completed']:.2f}")
+    print(f"  Execution time: {avg_results['avg_execution_time']:.2f}s")
 
 if __name__ == "__main__":
     main()
