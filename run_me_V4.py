@@ -25,9 +25,10 @@ from ATC import ATC
 
 #%% SIMULATION PARAMETERS
 # Layout parameters
-DUBAI_LAYOUT = False  # Whether to use Dubai or baseline network
-NODES_FILE = "nodes_DXB.xlsx" if DUBAI_LAYOUT else "nodes.xlsx"
-EDGES_FILE = "edges_DXB.xlsx" if DUBAI_LAYOUT else "edges.xlsx"
+LFPG_LAYOUT = True  # Whether to use LFPG or baseline network
+WIND_WEST = True    # Whether to use west or east wind for LFPG layout
+NODES_FILE = "nodes_LFPG.xlsx" if LFPG_LAYOUT else "nodes.xlsx"
+EDGES_FILE = "edges_LFPG.xlsx" if LFPG_LAYOUT else "edges.xlsx"
 
 # Simulation settings
 SIMULATION_TIME = 100
@@ -44,11 +45,26 @@ task_interval = 3    # New: generate a task every 5 seconds
 total_tugs = 4       # New: total number of tugs (will be split evenly between depots)
 
 # Node IDs 
-DEPARTURE_DEPOT_POSITION = 112.0
-ARRIVAL_DEPOT_POSITION = 113.0
-ARRIVAL_RUNWAY_NODES = [37.0, 38.0]
-GATE_NODES = [97.0, 34.0, 35.0, 36.0, 98.0]
-DEPARTURE_RUNWAY_NODES = [1.0, 2.0]
+if LFPG_LAYOUT:
+    if WIND_WEST:
+        ARRIVAL_RUNWAY_NODES = [69.0, 70.0]
+        DEPARTURE_RUNWAY_NODES = [58.0, 59.0]
+        DEPARTURE_DEPOT_POSITION = 200.0
+        ARRIVAL_DEPOT_POSITION = 201.0
+    else:
+        ARRIVAL_RUNWAY_NODES = [71.0, 72.0]
+        DEPARTURE_RUNWAY_NODES = [53.0, 54.0]
+        DEPARTURE_DEPOT_POSITION = 200.0
+        ARRIVAL_DEPOT_POSITION = 201.0
+    GATE_NODES = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124]
+else:
+    DEPARTURE_DEPOT_POSITION = 112.0
+    ARRIVAL_DEPOT_POSITION = 113.0
+    ARRIVAL_RUNWAY_NODES = [37.0, 38.0]
+    GATE_NODES = [97.0, 34.0, 35.0, 36.0, 98.0]
+    DEPARTURE_RUNWAY_NODES = [1.0, 2.0]
+
+START_NODES = [ARRIVAL_DEPOT_POSITION] + [DEPARTURE_DEPOT_POSITION] + ARRIVAL_RUNWAY_NODES + DEPARTURE_RUNWAY_NODES + GATE_NODES
 GATE_HOLDING_TIME = 10  # Time an aircraft stays at a gate before being ready for departure
 
 # Bidding parameters
@@ -252,7 +268,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
 
     # Initialize visualization if enabled
     if visualization:
-        map_properties = map_initialization(nodes_dict, edges_dict)
+        map_properties = map_initialization(nodes_dict, edges_dict, LFPG_LAYOUT)
 
     running = True
     escape_pressed = False
@@ -347,7 +363,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
                 }
         
         if visualization:
-            escape_pressed = map_running(map_properties, current_states, t)
+            escape_pressed = map_running(map_properties, current_states, t, departure_depot, arrival_depot, nodes_dict)
             timer.sleep(visualization_speed)
         
         for id1 in current_states:
@@ -362,7 +378,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         if len(tasks_available) > 0 and (t/DELTA_T).is_integer():
             auctioneer.tug_availability(atc.tug_list)
             auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
-            auctioneer.decision(departure_depot, arrival_depot)
+            auctioneer.decision(departure_depot, arrival_depot, START_NODES)
 
         # Tugs Charging
         departure_depot.charging(DT)
@@ -395,7 +411,7 @@ def run_simulation(visualization_speed=visualization_speed, task_interval=task_i
         for tug in atc.tug_list:
             if tug.status in ["moving_to_task", "executing", "to_depot"]:
                 # print(tug.id, tug.wait, tug.from_to, tug.path_to_goal)
-                tug.move(DT, t, atc.constraints_at_t, DELTA_T)
+                tug.move(DT, t, atc.constraints_at_t, LFPG_LAYOUT, departure_depot, arrival_depot)
         
         # --- KPI: Detect Task Completion & Record Metrics ---
         # We record two time metrics:

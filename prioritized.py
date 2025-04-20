@@ -67,7 +67,7 @@ def run_prioritized_planner(tug_lst, tug, nodes_dict, edges_dict, heuristics, t,
                             constraints.append(con)
                             con = {'positive': False, 'agent': j.id, 'loc': [previous_node[0], node[0]], 'timestep': node[1], 'constraining_tug': constraining_tug}
                             constraints.append(con)
-                        if node[0] == constraining_tug.goal:   # We will need this if we have aircraft staying at a gate later on, will need to modify before use!
+                        if node[0] == constraining_tug.goal:
                             next_time = round(node[1]+delta_t, 1)
                             con = {'positive': False, 'agent': j.id, 'loc': [node[0]], 'timestep': next_time, 'constraining_tug': constraining_tug}
                             constraints.append(con)

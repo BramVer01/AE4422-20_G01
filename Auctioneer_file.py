@@ -33,7 +33,7 @@ class Auctioneer:
                     self.prices.append(price)
                     self.price_combinations.append([task, tug])
 
-    def decision(self, dep_depot, arr_depot):
+    def decision(self, dep_depot, arr_depot, START_NODES):
         self.pairings = []
         tasks_served = []
         tugs_served = []
@@ -51,7 +51,7 @@ class Auctioneer:
                 continue
                 
             # Try to assign the task
-            if tug.assign_task(task):
+            if tug.assign_task(task, dep_depot, arr_depot, START_NODES):
                 self.pairings.append([task, tug])
                 tasks_served.append(task)
                 tugs_served.append(tug)
