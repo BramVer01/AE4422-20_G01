@@ -605,7 +605,9 @@ def run_simulation(visualization_speed, task_interval,
     }
 
 
+'''Impact of Fleet Size and Task Interval on Computation Time'''
 if __name__ == "__main__":
+    import time
     import numpy as np
     import matplotlib.pyplot as plt
     import pandas as pd
@@ -618,9 +620,9 @@ if __name__ == "__main__":
     DT = 0.1                  # movement timestep
 
     # batch‐run parameters
-    tug_counts       = [4, 6, 8, 10, 12]
-    n_runs_per_size  = 1
-    utilization_target = 0.8  # for reference
+    tug_counts      = [4, 6, 8, 10, 12]
+    task_intervals  = [1, 3, 5, 7, 9]
+    n_runs_per_combo = 5
 
     # helper: mean + 95% CI
     def mean_ci(data, confidence=0.95):
@@ -632,75 +634,156 @@ if __name__ == "__main__":
 
     # containers
     summary = []
-    plot_data = {
-      "tugs": tug_counts,
-      "U_means": [], "U_cis": [],
-      "I_means": [], "I_cis": [],
-      "M_means": [], "M_cis": []
-    }
+    plot_data = { n: {"ti": [], "mean_cpu": [], "ci_cpu": []} for n in tug_counts }
 
+    print("Running CPU‐time batch over fleet sizes and task intervals...")
     for n in tug_counts:
-        U_vals = []
-        I_vals = []
-        M_vals = []
-        print(f"Running {n} tugs...")
-        for _ in range(n_runs_per_size):
-            res = run_simulation(
-                visualization_speed=0.0,
-                task_interval=3,
-                total_tugs=n,
-                simulation_time=SIMULATION_TIME
-            )
-            # sum up state times
-            it = sum(res["tug_state_times"][tid]["idle"]             for tid in res["tug_state_times"])
-            mt = sum(res["tug_state_times"][tid]["moving_to_task"]   for tid in res["tug_state_times"])
-            ex = sum(res["tug_state_times"][tid]["executing"]        for tid in res["tug_state_times"])
-            tot = it + mt + ex
-            U_vals.append(ex / tot if tot>0 else np.nan)
-            I_vals.append(it / tot if tot>0 else np.nan)
-            M_vals.append(mt / tot if tot>0 else np.nan)
+        for ti in task_intervals:
+            cpu_times = []
+            print(f"Testing {n} tugs, interval={ti}s...")
+            for _ in range(n_runs_per_combo):
+                t0 = time.time()
+                run_simulation(
+                    visualization_speed=0.0,
+                    task_interval=ti,
+                    total_tugs=n,
+                    simulation_time=SIMULATION_TIME
+                )
+                cpu_times.append(time.time() - t0)
+            mean_cpu, ci_cpu = mean_ci(cpu_times)
+            summary.append({
+                "Tugs": n,
+                "Task Interval": ti,
+                "Mean CPU Time": mean_cpu,
+                "95% CI": ci_cpu,
+            })
+            plot_data[n]["ti"].append(ti)
+            plot_data[n]["mean_cpu"].append(mean_cpu)
+            plot_data[n]["ci_cpu"].append(ci_cpu)
+            print(f"  CPU = {mean_cpu:.2f}±{ci_cpu:.2f} s")
 
-        # compute statistics
-        U_mean, U_ci = mean_ci(U_vals)
-        I_mean, I_ci = mean_ci(I_vals)
-        M_mean, M_ci = mean_ci(M_vals)
-
-        plot_data["U_means"].append(U_mean)
-        plot_data["U_cis"].append(U_ci)
-        plot_data["I_means"].append(I_mean)
-        plot_data["I_cis"].append(I_ci)
-        plot_data["M_means"].append(M_mean)
-        plot_data["M_cis"].append(M_ci)
-
-        summary.append({
-            "Tugs": n,
-            "U_mean": U_mean, "U_CI": U_ci,
-            "I_mean": I_mean, "I_CI": I_ci,
-            "M_mean": M_mean, "M_CI": M_ci,
-        })
-
-        print(f"  U = {U_mean:.2f}±{U_ci:.2f}, I = {I_mean:.2f}±{I_ci:.2f}, M = {M_mean:.2f}±{M_ci:.2f}")
-
-    # Plot all three ratios vs fleet size
+    # plot CPU time vs task interval for each fleet size
     plt.figure(figsize=(10,6))
-    plt.errorbar(plot_data["tugs"], plot_data["U_means"], yerr=plot_data["U_cis"],
-                 fmt='o-', capsize=4, label="Utilization (U)")
-    plt.errorbar(plot_data["tugs"], plot_data["I_means"], yerr=plot_data["I_cis"],
-                 fmt='s--', capsize=4, label="Idle (I)")
-    plt.errorbar(plot_data["tugs"], plot_data["M_means"], yerr=plot_data["M_cis"],
-                 fmt='d-.', capsize=4, label="Move-to-Task (M)")
-    plt.axhline(y=utilization_target, color='gray', linestyle=':', label=f"{int(utilization_target*100)}% U target")
-    plt.xlabel("Number of Taxi‑Bots")
-    plt.ylabel("Mean Time Ratio")
-    plt.title("Effect of Fleet Size on Idle, Move‑to‑Task, and Execution Ratios")
+    for n in tug_counts:
+        plt.errorbar(
+            plot_data[n]["ti"],
+            plot_data[n]["mean_cpu"],
+            yerr=plot_data[n]["ci_cpu"],
+            fmt='o-',
+            capsize=4,
+            label=f"{n} tugs"
+        )
+    plt.xlabel("Task Interval (s)")
+    plt.ylabel("Mean CPU Time (s)")
+    plt.title("Effect of Fleet Size and Task Interval on Computation Time")
     plt.legend()
     plt.tight_layout()
     plt.show()
 
-    # print summary
+    # summary table
     df = pd.DataFrame(summary)
-    print("\nResource Utilization Summary:")
+    print("\nComputation Time Summary:")
     print(df.to_string(index=False))
+
+
+
+# '''Impact of Fleet Size on Resource Utilization'''
+# if __name__ == "__main__":
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+#     import pandas as pd
+#     from scipy import stats
+
+#     # Simulation settings
+#     SIMULATION_TIME = 100
+#     PLANNER = "Prioritized"   # (set globally in run_simulation)
+#     DELTA_T = 0.5             # planning timestep
+#     DT = 0.1                  # movement timestep
+
+#     # batch‐run parameters
+#     tug_counts       = [4, 6, 8, 10, 12]
+#     n_runs_per_size  = 10
+#     utilization_target = 0.8  # for reference
+
+#     # helper: mean + 95% CI
+#     def mean_ci(data, confidence=0.95):
+#         a = np.array(data)
+#         mean = np.nanmean(a)
+#         se   = stats.sem(a, nan_policy='omit')
+#         h    = se * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
+#         return mean, h
+
+#     # containers
+#     summary = []
+#     plot_data = {
+#       "tugs": tug_counts,
+#       "U_means": [], "U_cis": [],
+#       "I_means": [], "I_cis": [],
+#       "M_means": [], "M_cis": []
+#     }
+
+#     for n in tug_counts:
+#         U_vals = []
+#         I_vals = []
+#         M_vals = []
+#         print(f"Running {n} tugs...")
+#         for _ in range(n_runs_per_size):
+#             res = run_simulation(
+#                 visualization_speed=0.0,
+#                 task_interval=3,
+#                 total_tugs=n,
+#                 simulation_time=SIMULATION_TIME
+#             )
+#             # sum up state times
+#             it = sum(res["tug_state_times"][tid]["idle"]             for tid in res["tug_state_times"])
+#             mt = sum(res["tug_state_times"][tid]["moving_to_task"]   for tid in res["tug_state_times"])
+#             ex = sum(res["tug_state_times"][tid]["executing"]        for tid in res["tug_state_times"])
+#             tot = it + mt + ex
+#             U_vals.append(ex / tot if tot>0 else np.nan)
+#             I_vals.append(it / tot if tot>0 else np.nan)
+#             M_vals.append(mt / tot if tot>0 else np.nan)
+
+#         # compute statistics
+#         U_mean, U_ci = mean_ci(U_vals)
+#         I_mean, I_ci = mean_ci(I_vals)
+#         M_mean, M_ci = mean_ci(M_vals)
+
+#         plot_data["U_means"].append(U_mean)
+#         plot_data["U_cis"].append(U_ci)
+#         plot_data["I_means"].append(I_mean)
+#         plot_data["I_cis"].append(I_ci)
+#         plot_data["M_means"].append(M_mean)
+#         plot_data["M_cis"].append(M_ci)
+
+#         summary.append({
+#             "Tugs": n,
+#             "U_mean": U_mean, "U_CI": U_ci,
+#             "I_mean": I_mean, "I_CI": I_ci,
+#             "M_mean": M_mean, "M_CI": M_ci,
+#         })
+
+#         print(f"  U = {U_mean:.2f}±{U_ci:.2f}, I = {I_mean:.2f}±{I_ci:.2f}, M = {M_mean:.2f}±{M_ci:.2f}")
+
+#     # Plot all three ratios vs fleet size
+#     plt.figure(figsize=(10,6))
+#     plt.errorbar(plot_data["tugs"], plot_data["U_means"], yerr=plot_data["U_cis"],
+#                  fmt='o-', capsize=4, label="Utilization (U)")
+#     plt.errorbar(plot_data["tugs"], plot_data["I_means"], yerr=plot_data["I_cis"],
+#                  fmt='s--', capsize=4, label="Idle (I)")
+#     plt.errorbar(plot_data["tugs"], plot_data["M_means"], yerr=plot_data["M_cis"],
+#                  fmt='d-.', capsize=4, label="Move-to-Task (M)")
+#     plt.axhline(y=utilization_target, color='gray', linestyle=':', label=f"{int(utilization_target*100)}% U target")
+#     plt.xlabel("Number of Taxi‑Bots")
+#     plt.ylabel("Mean Time Ratio")
+#     plt.title("Effect of Fleet Size on Idle, Move‑to‑Task, and Execution Ratios")
+#     plt.legend()
+#     plt.tight_layout()
+#     plt.show()
+
+#     # print summary
+#     df = pd.DataFrame(summary)
+#     print("\nResource Utilization Summary:")
+#     print(df.to_string(index=False))
 
 
 
