@@ -259,76 +259,79 @@ def generate_flight_task(flight_id, t, gate_status):
         return FlightTask(departing_flight_id, "D", start_node, goal_node, t)
     return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
-#%% MAIN SIMULATION FUNCTION (with heat map tracking)
-def run_simulation(visualization_speed, task_interval, total_tugs, simulation_time):
+
+def run_simulation(visualization_speed, task_interval, 
+                   total_tugs, simulation_time):
     # --- KPI Global Variables ---
     total_collisions = 0
-    task_completion_times = []         
-    total_task_completion_times = []   
-    task_distances = []                
-    total_tasks_completed = 0          
-    delays = []                        
-    total_task_start_times = {}        
-    execution_start_times = {}         
-    task_nodes = {}                    
-    prev_status = {}                   
-    waiting_aircraft = []              
-    task_details = {}
-    idle_times = {}            
-    idle_time_history = {}     
-    battery_history = {}       
-    time_history = []          
+    task_completion_times = []         # Execution time (from moving_to_task -> executing to to_depot)
+    total_task_completion_times = []   # Total task time (from idle -> moving_to_task to idle)
+    task_distances = []                # Number of node transitions during execution
+    total_tasks_completed = 0          # Total tasks completed
+    delays = []                        # List to record delay values for each completed task
 
-    # Initialize node activity tracking
-    nodes_dict, edges_dict, _ = import_layout(NODES_FILE, EDGES_FILE)
-    node_activity = {node_id: 0 for node_id in nodes_dict}
+    total_task_start_times = {}        # When a tug is assigned a task (idle -> moving_to_task)
+    execution_start_times = {}         # When a tug starts executing (moving_to_task -> executing)
+    task_nodes = {}                    # List of nodes traversed during execution
+    prev_status = {}                   # Previous status for each tug
+    waiting_aircraft = []              # Aircraft waiting for gates
+
+    # New dictionary to store task details when a tug is assigned a task.
+    task_details = {}
+
+    # --- New: Idle Time Tracking ---
+    idle_times = {}            # Current accumulated idle time per tug
+    idle_time_history = {}     # History: for each tug, a list of accumulated idle time values per timestep
+    battery_history = {}       # History: for each tug, a list of battery percentages per timestep
+    time_history = []          # History of simulation time
 
     # Initialize layout and graph
+    nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
     graph = create_graph(nodes_dict, edges_dict, plot_graph)
     heuristics = calc_heuristics(graph, nodes_dict)
 
-    # Initialize ATC and depots
+    # Initialize list to track all tug agents (from ATC)
     atc = ATC()
+
+    # Initialize depots
     departure_depot = Depot(1, position=DEPARTURE_DEPOT_POSITION)
     arrival_depot = Depot(2, position=ARRIVAL_DEPOT_POSITION)
 
-    # Create tugs and initialize tracking
+    # Create tugs and add to depot queues; initialize idle time and battery tracking.
     for i in range(total_tugs):
         tug_id = i + 1
-        depot = departure_depot if i < total_tugs//2 else arrival_depot
-        tug = Tug(tug_id, "D" if i < total_tugs//2 else "A", 
-                 depot.position, 0, nodes_dict)
-        depot.tugs.append(tug)
+        if i < total_tugs // 2:
+            tug = Tug(tug_id=tug_id, a_d="D", start_node=departure_depot.position, spawn_time=0, nodes_dict=nodes_dict)
+            departure_depot.tugs.append(tug)
+        else:
+            tug = Tug(tug_id=tug_id, a_d="A", start_node=arrival_depot.position, spawn_time=0, nodes_dict=nodes_dict)
+            arrival_depot.tugs.append(tug)
         atc.tug_list.append(tug)
         prev_status[tug.id] = tug.status
         idle_times[tug.id] = 0
         idle_time_history[tug.id] = []
-        battery_history[tug.id] = []
+        battery_history[tug.id] = []  # Initialize battery history for each tug
 
-    # Initialize state time tracking
-    tug_state_times = {tug.id: {"idle":0, "moving_to_task":0, 
-                              "executing":0, "to_depot":0} 
-                     for tug in atc.tug_list}
+    # Initialize state time tracking for each tug (for "idle", "moving_to_task", "executing", "to_depot")
+    tug_state_times = {tug.id: {"idle": 0, "moving_to_task": 0, "executing": 0, "to_depot": 0} for tug in atc.tug_list}
 
-    # Initialize visualization
+    # Initialize Auctioneer
+    auctioneer = Auctioneer(atc.tug_list)
+
+    # Initialize visualization if enabled
     if visualization:
         map_properties = map_initialization(nodes_dict, edges_dict, LFPG_LAYOUT)
 
-    # Simulation loop
     running = True
     escape_pressed = False
+    time_end = simulation_time
     t = 0
-    task_counter = 0
+    task_counter = 0  # Counts tasks generated
     gate_status = {}
 
+    print("Simulation Started")
     while running:
         t = round(t, 2)
-
-        # Update node activity for heat map
-        for tug in atc.tug_list:
-            tug.get_node_by_xy()
-            if hasattr(tug, 'current_node') and tug.current_node in node_activity:
-                node_activity[tug.current_node] += 1
 
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
@@ -415,15 +418,15 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         # --- Tasks Assignment ---
         tasks_available = departure_depot.tasks + arrival_depot.tasks
         if tasks_available and (t/DELTA_T).is_integer():
-            Auctioneer.tug_availability(atc.tug_list)
-            Auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
-            Auctioneer.decision(departure_depot, arrival_depot, START_NODES)
+            auctioneer.tug_availability(atc.tug_list)
+            auctioneer.ask_price(tasks_available, nodes_dict, heuristics, t, [departure_depot, arrival_depot])
+            auctioneer.decision(departure_depot, arrival_depot, START_NODES)
 
         # --- Tugs Charging ---
         departure_depot.charging(DT)
         arrival_depot.charging(DT)
 
-        if t >= SIMULATION_TIME or escape_pressed:
+        if t >= time_end or escape_pressed:
             running = False
             pg.quit()
             print("Simulation Stopped")
@@ -540,109 +543,62 @@ def run_simulation(visualization_speed, task_interval, total_tugs, simulation_ti
         for tug in atc.tug_list:
             if tug.status in tug_state_times[tug.id]:
                 tug_state_times[tug.id][tug.status] += DT
+        
+        t = t + DT
 
-        # End condition
-        if t >= simulation_time or escape_pressed:
-            running = False
-            if visualization: pg.quit()
+    avg_execution_time = sum(task_completion_times) / len(task_completion_times) if task_completion_times else 0
+    avg_total_time = sum(total_task_completion_times) / len(total_task_completion_times) if total_task_completion_times else 0
+    avg_distance = sum(task_distances) / len(task_distances) if task_distances else 0
 
-        t += DT
+    print("\n----- KPI SUMMARY -----")
+    print("Total collisions detected:", total_collisions)
+    print("Total tasks completed:", total_tasks_completed)
+    print("Average execution time:", avg_execution_time)
+    print("Average total task time:", avg_total_time)
+    print("Average task distance (nodes):", avg_distance)
+    print("-----------------------")
+    
+    print("\n----- Delay Summary -----")
+    if delays:
+        avg_delay = sum(delays) / len(delays)
+        print("Average Delay:", avg_delay)
+    else:
+        print("No delay data recorded.")
 
-    # Calculate averages
-    avg_exec_time = np.mean(task_completion_times) if task_completion_times else 0
-    avg_total_time = np.mean(total_task_completion_times) if total_task_completion_times else 0
-    avg_distance = np.mean(task_distances) if task_distances else 0
+    # --- Calculate Difference between Tasks Generated and Tasks Completed ---
+    tasks_difference = task_counter - total_tasks_completed
+    print("\n----- Task Generation Difference -----")
+    print("Tasks Generated:", task_counter)
+    print("Tasks Completed:", total_tasks_completed)
+    print("Difference (Generated - Completed):", tasks_difference)
 
+    # --- Print Tug State Time Summary ---
+    print("\n----- Tug State Time Summary -----")
+    for tug_id, states in tug_state_times.items():
+        print(f"Tug {tug_id} state times: {states}")
+    avg_state_times = {"idle": 0, "moving_to_task": 0, "executing": 0, "to_depot": 0}
+    for times in tug_state_times.values():
+        for state in avg_state_times:
+            avg_state_times[state] += times[state]
+    num_tugs = len(tug_state_times)
+    for state in avg_state_times:
+        avg_state_times[state] /= num_tugs
+    print("\n----- Average State Times -----")
+    print(avg_state_times)
+    
+    
+    # Return KPI metrics along with idle time, battery history, time histories, and state times.
     return {
-        "collisions": total_collisions,
-        "tasks_completed": total_tasks_completed,
-        "node_activity": node_activity,
-        "nodes_dict": nodes_dict,
-        "avg_exec_time": avg_exec_time,
-        "avg_total_time": avg_total_time,
-        "avg_distance": avg_distance,
-        "delays": delays,
-        "tug_state_times": tug_state_times
+         "collisions": total_collisions,
+         "tasks_completed": total_tasks_completed,
+         "tasks_difference": tasks_difference,  # New KPI: difference between tasks generated and completed
+         "avg_execution_time": avg_execution_time,
+         "avg_total_time": avg_total_time,
+         "avg_distance": avg_distance,
+         "delays": delays,
+         "idle_time_history": idle_time_history,
+         "battery_history": battery_history,
+         "time_history": time_history,
+         "tug_state_times": tug_state_times,
+         "avg_state_times": avg_state_times
     }
-
-#%% HEAT MAP VISUALIZATION FUNCTION
-def plot_heatmap(simulation_results):
-    """Visualizes node activity as a heat map."""
-    node_activity = simulation_results["node_activity"]
-    nodes_dict = simulation_results["nodes_dict"]
-    
-    plt.figure(figsize=(14, 10))
-    
-    # Extract coordinates and activity values
-    x = [nodes_dict[n]["x_pos"] for n in nodes_dict]
-    y = [nodes_dict[n]["y_pos"] for n in nodes_dict]
-    activity = [node_activity[n] for n in nodes_dict]
-    
-    # Create scatter plot with color gradient
-    scatter = plt.scatter(x, y, c=activity, cmap='hot_r', 
-                        s=150, alpha=0.8, edgecolor='k', 
-                        linewidths=0.5, zorder=2)
-    
-    # Add color bar
-    cbar = plt.colorbar(scatter, shrink=0.8)
-    cbar.set_label('Node Activity Count', fontsize=12)
-    
-    # Add node IDs
-    for node_id in nodes_dict:
-        plt.text(nodes_dict[node_id]["x_pos"], 
-                 nodes_dict[node_id]["y_pos"]+2,
-                 str(int(node_id)), 
-                 ha='center', va='bottom', 
-                 fontsize=8, color='blue', alpha=0.7)
-    
-    # Formatting
-    plt.title("Aircraft Tug Activity Heat Map", fontsize=14)
-    plt.xlabel("X Position (meters)", fontsize=12)
-    plt.ylabel("Y Position (meters)", fontsize=12)
-    plt.grid(True, alpha=0.3, zorder=1)
-    plt.gca().set_aspect('equal', adjustable='box')
-    
-    # Add legend
-    handles = [plt.Line2D([0], [0], marker='o', color='w', 
-              markerfacecolor='orange', markersize=10,
-              label='High Activity'),
-              plt.Line2D([0], [0], marker='o', color='w',
-              markerfacecolor='black', markersize=10,
-              label='Low Activity')]
-    plt.legend(handles=handles, loc='upper right')
-    
-    plt.tight_layout()
-    plt.show()
-
-#%% MAIN FUNCTION
-def main():
-    print("Starting airport tug simulation...")
-    
-    # Run simulation
-    results = run_simulation(
-        visualization_speed=0.1,
-        task_interval=2,
-        total_tugs=8,
-        simulation_time=300  # 5 minutes simulation
-    )
-    
-    # Show heat map
-    plot_heatmap(results)
-    
-    # Print summary statistics
-    print("\nSimulation Summary:")
-    print(f"Total tasks completed: {results['tasks_completed']}")
-    print(f"Average execution time: {results['avg_exec_time']:.2f}s")
-    print(f"Average total task time: {results['avg_total_time']:.2f}s")
-    print(f"Total collisions detected: {results['collisions']}")
-    
-    # Show node activity statistics
-    activity = results["node_activity"].values()
-    print("\nNode Activity Statistics:")
-    print(f"Most active node: {max(results['node_activity'], key=results['node_activity'].get)}")
-    print(f"Total node visits: {sum(activity)}")
-    print(f"Average node visits: {np.mean(list(activity)):.1f}")
-    print(f"Std.dev of node visits: {np.std(list(activity)):.1f}")
-
-if __name__ == "__main__":
-    main()
