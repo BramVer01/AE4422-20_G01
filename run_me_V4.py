@@ -628,44 +628,67 @@ def run_simulation(visualization_speed, task_interval,
         "nodes_dict": nodes_dict
     }
 
+import matplotlib.colors as mcolors
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
 def plot_heat_map(simulation_results):
-    """Plots a heat map of node activity from simulation results."""
+    """Plots a heat map of node activity from simulation results with enhanced midrange contrast."""
     plt.figure(figsize=(14, 10))
     
-    # Extract data from results
+    # Extract data
     node_activity = simulation_results["node_activity"]
-    nodes_dict = simulation_results["nodes_dict"]
+    nodes_dict    = simulation_results["nodes_dict"]
+    x = np.array([nodes_dict[n]["x_pos"] for n in nodes_dict])
+    y = np.array([nodes_dict[n]["y_pos"] for n in nodes_dict])
+    activity = np.array([node_activity[n]       for n in nodes_dict])
     
-    # Prepare plot data
-    x = [nodes_dict[n]["x_pos"] for n in nodes_dict]
-    y = [nodes_dict[n]["y_pos"] for n in nodes_dict]
-    activity = [node_activity[n] for n in nodes_dict]
+    # Use PowerNorm to emphasize midrange
+    norm = mcolors.PowerNorm(gamma=0.5, vmin=activity.min(), vmax=activity.max())
     
-    # Create scatter plot
-    scatter = plt.scatter(x, y, c=activity, cmap='hot', 
-                        s=200, alpha=0.8, edgecolor='k', 
-                        linewidths=0.5, zorder=2)
+    # Scatter with viridis (better midrange discrimination than 'hot')
+    scatter = plt.scatter(
+        x, y,
+        c=activity,
+        cmap='viridis',
+        norm=norm,
+        s=150,
+        alpha=0.9,
+        edgecolor='k',
+        linewidths=0.5,
+        zorder=2
+    )
     
-    # Add color bar
+    # Color bar
     cbar = plt.colorbar(scatter, shrink=0.8)
     cbar.set_label('Node Activity Count', fontsize=12)
     
-    # Add node IDs
-    for node_id in nodes_dict:
-        plt.text(nodes_dict[node_id]["x_pos"], 
-                 nodes_dict[node_id]["y_pos"],
-                 str(int(node_id)), 
-                 ha='center', va='center', 
-                 fontsize=8, color='blue', alpha=0.7)
+    # Node labels
+    for node_id, ax in nodes_dict.items():
+        plt.text(
+            ax["x_pos"],
+            ax["y_pos"],
+            str(int(node_id)),
+            ha='center',
+            va='center',
+            fontsize=7,
+            color='white' if node_activity[node_id] > activity.mean() else 'black',
+            alpha=0.8
+        )
     
     # Formatting
-    plt.title("Aircraft Tug Activity Heat Map", fontsize=16)
+    plt.title("Aircraft Tug Activity Heat Map (Enhanced Midrange Contrast)", fontsize=16)
     plt.xlabel("X Position (meters)", fontsize=12)
     plt.ylabel("Y Position (meters)", fontsize=12)
     plt.grid(True, alpha=0.3, zorder=1)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     plt.show()
+
+
 
 def main():
     # Run simulation with parameters
