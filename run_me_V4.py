@@ -260,6 +260,11 @@ def generate_flight_task(flight_id, t, gate_status):
     return FlightTask(flight_id, a_d, start_node, goal_node, t)
 
 
+"""
+Run-me.py is the main file of the simulation. Run this file to run the simulation.
+"""
+
+
 def run_simulation(visualization_speed, task_interval, 
                    total_tugs, simulation_time):
     # --- KPI Global Variables ---
@@ -285,10 +290,17 @@ def run_simulation(visualization_speed, task_interval,
     battery_history = {}       # History: for each tug, a list of battery percentages per timestep
     time_history = []          # History of simulation time
 
+    # Add node activity tracking
+    node_activity = {}
+
     # Initialize layout and graph
     nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
     graph = create_graph(nodes_dict, edges_dict, plot_graph)
     heuristics = calc_heuristics(graph, nodes_dict)
+
+    # Initialize node activity tracking
+    node_activity = {node_id: 0 for node_id in nodes_dict}
+
 
     # Initialize list to track all tug agents (from ATC)
     atc = ATC()
@@ -332,6 +344,16 @@ def run_simulation(visualization_speed, task_interval,
     print("Simulation Started")
     while running:
         t = round(t, 2)
+
+        # --- Track node activity for heat map ---
+        for tug in atc.tug_list:
+            tug.get_node_by_xy()
+            current_node = getattr(tug, 'current_node', None)
+            if current_node in node_activity:
+                node_activity[current_node] += 1
+            elif current_node is not None:
+                print(f"Warning: Tug {tug.id} at unknown node {current_node}")
+
 
         # --- Task Creation ---
         for gate, info in list(gate_status.items()):
@@ -586,19 +608,89 @@ def run_simulation(visualization_speed, task_interval,
     print("\n----- Average State Times -----")
     print(avg_state_times)
     
-    
-    # Return KPI metrics along with idle time, battery history, time histories, and state times.
+  
+    # Return results with node activity data
     return {
-         "collisions": total_collisions,
-         "tasks_completed": total_tasks_completed,
-         "tasks_difference": tasks_difference,  # New KPI: difference between tasks generated and completed
-         "avg_execution_time": avg_execution_time,
-         "avg_total_time": avg_total_time,
-         "avg_distance": avg_distance,
-         "delays": delays,
-         "idle_time_history": idle_time_history,
-         "battery_history": battery_history,
-         "time_history": time_history,
-         "tug_state_times": tug_state_times,
-         "avg_state_times": avg_state_times
+        # [Keep all original return values]
+        "collisions": total_collisions,
+        "tasks_completed": total_tasks_completed,
+        "tasks_difference": tasks_difference,
+        "avg_execution_time": avg_execution_time,
+        "avg_total_time": avg_total_time,
+        "avg_distance": avg_distance,
+        "delays": delays,
+        "idle_time_history": idle_time_history,
+        "battery_history": battery_history,
+        "time_history": time_history,
+        "tug_state_times": tug_state_times,
+        "avg_state_times": avg_state_times,
+        "node_activity": node_activity,
+        "nodes_dict": nodes_dict
     }
+
+def plot_heat_map(simulation_results):
+    """Plots a heat map of node activity from simulation results."""
+    plt.figure(figsize=(14, 10))
+    
+    # Extract data from results
+    node_activity = simulation_results["node_activity"]
+    nodes_dict = simulation_results["nodes_dict"]
+    
+    # Prepare plot data
+    x = [nodes_dict[n]["x_pos"] for n in nodes_dict]
+    y = [nodes_dict[n]["y_pos"] for n in nodes_dict]
+    activity = [node_activity[n] for n in nodes_dict]
+    
+    # Create scatter plot
+    scatter = plt.scatter(x, y, c=activity, cmap='hot', 
+                        s=200, alpha=0.8, edgecolor='k', 
+                        linewidths=0.5, zorder=2)
+    
+    # Add color bar
+    cbar = plt.colorbar(scatter, shrink=0.8)
+    cbar.set_label('Node Activity Count', fontsize=12)
+    
+    # Add node IDs
+    for node_id in nodes_dict:
+        plt.text(nodes_dict[node_id]["x_pos"], 
+                 nodes_dict[node_id]["y_pos"],
+                 str(int(node_id)), 
+                 ha='center', va='center', 
+                 fontsize=8, color='blue', alpha=0.7)
+    
+    # Formatting
+    plt.title("Aircraft Tug Activity Heat Map", fontsize=16)
+    plt.xlabel("X Position (meters)", fontsize=12)
+    plt.ylabel("Y Position (meters)", fontsize=12)
+    plt.grid(True, alpha=0.3, zorder=1)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # Run simulation with parameters
+    sim_results = run_simulation(
+        visualization_speed=0.1,
+        task_interval=2,
+        total_tugs=8,
+        simulation_time=300
+    )
+    
+    # Generate heat map
+    plot_heat_map(sim_results)
+    
+    # Print summary statistics
+    print("\nSimulation Summary:")
+    print(f"Total collisions: {sim_results['collisions']}")
+    print(f"Tasks completed: {sim_results['tasks_completed']}")
+    print(f"Average execution time: {sim_results['avg_execution_time']:.2f}s")
+    
+    # Node activity statistics
+    activity = sim_results["node_activity"].values()
+    print("\nNode Activity Statistics:")
+    print(f"Most active node: {max(sim_results['node_activity'], key=sim_results['node_activity'].get)}")
+    print(f"Total node visits: {sum(activity)}")
+    print(f"Average node visits: {np.mean(list(activity)):.1f}")
+
+if __name__ == "__main__":
+    main()
