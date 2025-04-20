@@ -604,75 +604,157 @@ def run_simulation(visualization_speed, task_interval,
          "avg_state_times": avg_state_times
     }
 
-
-'''Baseline Model Performance'''
+'''Impact of Fleet Size and Task Interval on Task Completion Rate'''
 if __name__ == "__main__":
-    import time
     import numpy as np
+    import matplotlib.pyplot as plt
     import pandas as pd
+    from scipy import stats
 
-    # Baseline configuration
-    SIMULATION_TIME = 300       # timesteps
-    TASK_INTERVAL    = 3        # seconds
-    TOTAL_TUGS       = 8        # fleet size
-    N_RUNS           = 10      # replications
+    # Simulation settings
+    SIMULATION_TIME   = 100    # simulation duration in timesteps
+    DELTA_T           = 0.5    # planning timestep (global)
+    DT                = 0.1    # movement timestep (global)
 
-    # Containers for per‐run metrics
-    collisions        = []
-    completion_rates  = []
-    mean_delays       = []
-    exec_times        = []
-    total_times       = []
-    avg_distances     = []
-    cpu_times         = []
+    # batch‐run parameters
+    tug_counts        = [4, 6, 8, 10]
+    task_intervals    = [1, 3, 5, 7, 9]
+    n_runs_per_combo  = 10
 
-    print(f"Running baseline ({TOTAL_TUGS} tugs, {TASK_INTERVAL}s interval, {SIMULATION_TIME} timesteps) for {N_RUNS} runs...")
-    for run in range(1, N_RUNS+1):
-        t0 = time.time()
-        res = run_simulation(
-            visualization_speed=0.0,
-            task_interval=TASK_INTERVAL,
-            total_tugs=TOTAL_TUGS,
-            simulation_time=SIMULATION_TIME
+    # helper: mean + 95% CI
+    def mean_ci(data, confidence=0.95):
+        a    = np.array(data, dtype=float)
+        mean = np.nanmean(a)
+        se   = stats.sem(a, nan_policy='omit')
+        h    = se * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
+        return mean, h
+
+    # containers for plotting and summary
+    plot_data = {n: {"ti": [], "mean_rate": [], "ci_rate": []} for n in tug_counts}
+    summary   = []
+
+    print("Running completion‐rate batch over fleet sizes and task intervals...")
+    for n in tug_counts:
+        for ti in task_intervals:
+            rates = []
+            print(f"  Testing {n} tugs, interval={ti}s...")
+            for _ in range(n_runs_per_combo):
+                res = run_simulation(
+                    visualization_speed=0.0,
+                    task_interval=ti,
+                    total_tugs=n,
+                    simulation_time=SIMULATION_TIME
+                )
+                completed = res["tasks_completed"]
+                generated = completed + res["tasks_difference"]
+                rate = completed / generated if generated > 0 else np.nan
+                rates.append(rate)
+
+            mean_rate, ci_rate = mean_ci(rates)
+            plot_data[n]["ti"].append(ti)
+            plot_data[n]["mean_rate"].append(mean_rate)
+            plot_data[n]["ci_rate"].append(ci_rate)
+
+            summary.append({
+                "Tugs": n,
+                "Task Interval": ti,
+                "Mean Rate": mean_rate,
+                "95% CI": ci_rate
+            })
+            print(f"    → Rate = {mean_rate:.3f} ± {ci_rate:.3f}")
+
+    # Plot completion rate vs task interval for each fleet size
+    plt.figure(figsize=(10, 6))
+    for n in tug_counts:
+        plt.errorbar(
+            plot_data[n]["ti"],
+            plot_data[n]["mean_rate"],
+            yerr=plot_data[n]["ci_rate"],
+            fmt='o-',
+            capsize=4,
+            label=f"{n} tugs"
         )
-        cpu_times.append(time.time() - t0)
+    plt.xlabel("Task Interval (s)")
+    plt.ylabel("Mean Completion Rate")
+    plt.title("Effect of Task Interval on Completion Rate for Different Fleet Sizes")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
-        collisions.append(res["collisions"])
-        tasks_completed = res["tasks_completed"]
-        tasks_generated = tasks_completed + res["tasks_difference"]
-        completion_rates.append(tasks_completed / tasks_generated if tasks_generated > 0 else np.nan)
-
-        mean_delays.append(np.mean(res["delays"]) if res["delays"] else np.nan)
-        exec_times.append(res["avg_execution_time"])
-        total_times.append(res["avg_total_time"])
-        avg_distances.append(res["avg_distance"])
-
-        if run % 10 == 0:
-            print(f"  Completed run {run}/{N_RUNS}")
-
-    # Aggregate
-    metrics = {
-        "Collisions per run": collisions,
-        "Completion rate": completion_rates,
-        "Average delay (s)": mean_delays,
-        "Execution time (s)": exec_times,
-        "Total task time (s)": total_times,
-        "Average distance (nodes)": avg_distances,
-        "CPU time (s)": cpu_times,
-    }
-
-    summary = []
-    for name, vals in metrics.items():
-        arr = np.array(vals, dtype=float)
-        summary.append({
-            "Metric": name,
-            "Mean":  np.nanmean(arr),
-            "Std":   np.nanstd(arr)
-        })
-
+    # Display summary table
     df = pd.DataFrame(summary)
-    print("\nBaseline Model Performance Summary:")
+    print("\nCompletion Rate Summary:")
     print(df.to_string(index=False))
+
+
+# '''Baseline Model Performance'''
+# if __name__ == "__main__":
+#     import time
+#     import numpy as np
+#     import pandas as pd
+
+#     # Baseline configuration
+#     SIMULATION_TIME = 300       # timesteps
+#     TASK_INTERVAL    = 3        # seconds
+#     TOTAL_TUGS       = 8        # fleet size
+#     N_RUNS           = 1      # replications
+
+#     # Containers for per‐run metrics
+#     collisions        = []
+#     completion_rates  = []
+#     mean_delays       = []
+#     exec_times        = []
+#     total_times       = []
+#     avg_distances     = []
+#     cpu_times         = []
+
+#     print(f"Running baseline ({TOTAL_TUGS} tugs, {TASK_INTERVAL}s interval, {SIMULATION_TIME} timesteps) for {N_RUNS} runs...")
+#     for run in range(1, N_RUNS+1):
+#         t0 = time.time()
+#         res = run_simulation(
+#             visualization_speed=0.0,
+#             task_interval=TASK_INTERVAL,
+#             total_tugs=TOTAL_TUGS,
+#             simulation_time=SIMULATION_TIME
+#         )
+#         cpu_times.append(time.time() - t0)
+
+#         collisions.append(res["collisions"])
+#         tasks_completed = res["tasks_completed"]
+#         tasks_generated = tasks_completed + res["tasks_difference"]
+#         completion_rates.append(tasks_completed / tasks_generated if tasks_generated > 0 else np.nan)
+
+#         mean_delays.append(np.mean(res["delays"]) if res["delays"] else np.nan)
+#         exec_times.append(res["avg_execution_time"])
+#         total_times.append(res["avg_total_time"])
+#         avg_distances.append(res["avg_distance"])
+
+#         if run % 10 == 0:
+#             print(f"  Completed run {run}/{N_RUNS}")
+
+#     # Aggregate
+#     metrics = {
+#         "Collisions per run": collisions,
+#         "Completion rate": completion_rates,
+#         "Average delay (s)": mean_delays,
+#         "Execution time (s)": exec_times,
+#         "Total task time (s)": total_times,
+#         "Average distance (nodes)": avg_distances,
+#         "CPU time (s)": cpu_times,
+#     }
+
+#     summary = []
+#     for name, vals in metrics.items():
+#         arr = np.array(vals, dtype=float)
+#         summary.append({
+#             "Metric": name,
+#             "Mean":  np.nanmean(arr),
+#             "Std":   np.nanstd(arr)
+#         })
+
+#     df = pd.DataFrame(summary)
+#     print("\nBaseline Model Performance Summary:")
+#     print(df.to_string(index=False))
 
 
 
