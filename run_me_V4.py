@@ -588,218 +588,195 @@ if __name__ == "__main__":
 #SENSITIVITY ANALYSIS TABLE: (for now done with 3 simulations per sensitivity adjustment as otherwise it would take hours)
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
-import pandas as pd
 import time
 import os
-from scipy import stats
+from multiprocessing import Pool, cpu_count
+from functools import partial
 
+# Simulation parameters for the contour plots
+TUGS_RANGE = range(2, 16, 2)  # [2, 4, 6, 8, 10, 12, 14]
+TASK_INTERVAL_RANGE = [1, 2, 3, 4, 5, 6, 7]
+LAYOUT_OPTIONS = [True, False]  # True = LFPG, False = Baseline
+PLANNER = "Prioritized"  # Only using the Prioritized planner
 
+# Number of simulation runs per parameter combination
+RUNS_PER_COMBO = 100  # Set to 100 for final version
 
-# Define base parameter values
-base_values = {
-    'task_interval': 3,  
-    'total_tugs': 4,     
-    'simulation_time': 100,
-    'alpha': ALPHA,
-    'beta': BETA,
-    'gamma': GAMMA
+# KPIs to track and generate plots for
+KPI_METRICS = [
+    "collisions", 
+    "tasks_completed", 
+    "avg_execution_time", 
+    "avg_total_time", 
+    "avg_distance", 
+    "cpu_runtime"
+]
+
+# Better names for the plots
+KPI_NAMES = {
+    "collisions": "Number of Collisions",
+    "tasks_completed": "Total Tasks Completed",
+    "avg_execution_time": "Average Execution Time (s)",
+    "avg_total_time": "Average Total Task Time (s)",
+    "avg_distance": "Average Distance (nodes)",
+    "cpu_runtime": "CPU Runtime (s)"
 }
 
-# Define parameter ranges to explore
-param_ranges = {
-    'task_interval': (2, 6),
-    'total_tugs': (5, 15),
-    'simulation_time': (100, 150),
-    'alpha': (ALPHA * 0.8, ALPHA * 1.2),
-    'beta': (BETA * 0.8, BETA * 1.2),
-    'gamma': (GAMMA * 0.8, GAMMA * 1.2)
-}
+def run_simulation_with_params(params):
+    """Run a single simulation with specified parameters"""
+    tugs, interval, layout, run_id = params
+    
+    # Set global variables for this run
+    global LFPG_LAYOUT, total_tugs, task_interval, visualization
+    LFPG_LAYOUT = layout
+    total_tugs = tugs
+    task_interval = interval
+    visualization = False  # Always disable visualization for batch runs
+    
+    print(f"Starting run {run_id+1}/{RUNS_PER_COMBO}: tugs={tugs}, interval={interval}, layout={'LFPG' if layout else 'Baseline'}")
+    
+    try:
+        kpi_results = run_simulation(
+            visualization_speed=0.001,
+            task_interval=interval,
+            total_tugs=tugs,
+            simulation_time=100  # Keep simulation time consistent
+        )
+        return kpi_results
+    except Exception as e:
+        print(f"Error in simulation: {e}")
+        # Return None for all metrics in case of error
+        return {metric: None for metric in KPI_METRICS}
 
-def improved_sensitivity_analysis(parameters, base_values, ranges, num_samples=3, num_replicates=3):
-    """
-    Perform improved sensitivity analysis for parameters with wider, custom ranges.
+def generate_contour_plots():
+    """Generate contour plots for all KPIs across parameter combinations"""
+    # Results structure: layout -> KPI -> tugs -> interval -> [values]
+    results = {
+        layout_name: {
+            kpi: np.zeros((len(TUGS_RANGE), len(TASK_INTERVAL_RANGE)))
+            for kpi in KPI_METRICS
+        }
+        for layout_name in ["LFPG", "Baseline"]
+    }
     
-    Args:
-        parameters (list): List of parameter names to analyze
-        base_values (dict): Dictionary with base values for each parameter
-        ranges (dict): Dictionary with (min, max) ranges for each parameter
-        num_samples (int): Number of samples to take within each parameter range
-        num_replicates (int): Number of simulation replicates for each parameter setting
+    # Count of successful runs for each configuration
+    success_counts = {
+        layout_name: np.zeros((len(TUGS_RANGE), len(TASK_INTERVAL_RANGE)))
+        for layout_name in ["LFPG", "Baseline"]
+    }
     
-    Returns:
-        pd.DataFrame: Dataframe with sensitivity results
-    """
-    results = []
+    # Create output directory if it doesn't exist
+    output_dir = "contour_plots"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    # Generate all parameter combinations
+    all_params = []
+    for layout_idx, layout in enumerate(LAYOUT_OPTIONS):
+        layout_name = "LFPG" if layout else "Baseline"
+        for tug_idx, tugs in enumerate(TUGS_RANGE):
+            for interval_idx, interval in enumerate(TASK_INTERVAL_RANGE):
+                for run in range(RUNS_PER_COMBO):
+                    all_params.append((tugs, interval, layout, run))
     
-    # Define KPIs to track
-    kpis = ["collisions", "tasks_completed", "avg_execution_time", 
-            "avg_total_time", "avg_distance", "cpu_runtime", "error_rate"]
+    # Run simulations in parallel
+    print(f"Running {len(all_params)} simulations across {min(cpu_count(), 8)} processes...")
+    with Pool(processes=min(cpu_count(), 8)) as pool:
+        all_results = pool.map(run_simulation_with_params, all_params)
     
-    print(f"Starting improved sensitivity analysis with {len(parameters)} parameters")
-    print(f"Base values: {base_values}")
-    print(f"Parameter ranges: {ranges}")
+    # Process results
+    param_idx = 0
+    for layout_idx, layout in enumerate(LAYOUT_OPTIONS):
+        layout_name = "LFPG" if layout else "Baseline"
+        for tug_idx, tugs in enumerate(TUGS_RANGE):
+            for interval_idx, interval in enumerate(TASK_INTERVAL_RANGE):
+                # Average results across runs
+                valid_results = []
+                for run in range(RUNS_PER_COMBO):
+                    result = all_results[param_idx]
+                    param_idx += 1
+                    if all(result[metric] is not None for metric in KPI_METRICS):
+                        valid_results.append(result)
+                
+                success_count = len(valid_results)
+                success_counts[layout_name][tug_idx, interval_idx] = success_count
+                
+                if success_count > 0:
+                    for kpi in KPI_METRICS:
+                        avg_value = sum(r[kpi] for r in valid_results) / success_count
+                        results[layout_name][kpi][tug_idx, interval_idx] = avg_value
     
-    # Track baseline performance
-    baseline_results = {kpi: [] for kpi in kpis}
-    
-    print("\n--- Running baseline simulations ---")
-    for i in range(num_replicates):
-        print(f"Baseline simulation {i+1}/{num_replicates}")
-        try:
-            kpi_result = run_simulation(
-                visualization_speed=0.001,
-                task_interval=base_values.get('task_interval', 3),
-                total_tugs=base_values.get('total_tugs', 4),
-                simulation_time=base_values.get('simulation_time', 100)
+    # Create contour plots for each KPI
+    for kpi in KPI_METRICS:
+        plt.figure(figsize=(12, 5))  # Wider figure with less height for side-by-side plots
+        plt.suptitle(f"Contour Plots of {KPI_NAMES[kpi]} - {PLANNER} Planner", fontsize=14)
+        
+        # Find global min/max values for consistent color scaling across both plots
+        min_val = min(np.min(results["LFPG"][kpi]), np.min(results["Baseline"][kpi]))
+        max_val = max(np.max(results["LFPG"][kpi]), np.max(results["Baseline"][kpi]))
+        levels = np.linspace(min_val, max_val, 15)
+        
+        for idx, layout_name in enumerate(["LFPG", "Baseline"]):
+            ax = plt.subplot(1, 2, idx + 1)  # 1 row, 2 columns
+            
+            data = results[layout_name][kpi]
+            
+            # Create the contour plot
+            contour = ax.contourf(
+                TASK_INTERVAL_RANGE, 
+                TUGS_RANGE, 
+                data, 
+                cmap='viridis',
+                levels=levels
             )
-            for kpi in kpis:
-                if kpi in kpi_result:
-                    baseline_results[kpi].append(kpi_result[kpi])
-        except Exception as e:
-            print(f"Error in baseline simulation {i+1}: {e}")
-    
-    # Calculate mean values for baseline
-    baseline_means = {kpi: np.mean(baseline_results[kpi]) for kpi in kpis if baseline_results[kpi]}
-    
-    print(f"\n--- Baseline simulation results ---")
-    for kpi, mean in baseline_means.items():
-        print(f"{kpi}: {mean:.4f}")
-    
-    # For each parameter, run simulations at different points in the range
-    for param in parameters:
-        if param not in ranges:
-            print(f"Warning: Parameter {param} not found in ranges. Skipping.")
-            continue
-        
-        param_range = ranges[param]
-        base_value = base_values[param]
-        
-        # Create evenly spaced samples across the range
-        if param == 'total_tugs':  # For discrete parameters, ensure integer values
-            param_values = np.linspace(param_range[0], param_range[1], num_samples, dtype=int)
-        else:
-            param_values = np.linspace(param_range[0], param_range[1], num_samples)
-        
-        print(f"\n--- Parameter: {param} ---")
-        print(f"Base value: {base_value}")
-        print(f"Testing values: {param_values}")
-        
-        # Results for this parameter
-        param_results = {value: {kpi: [] for kpi in kpis} for value in param_values}
-        
-        # Run simulations for each parameter value
-        for value in param_values:
-            print(f"\nRunning simulations for {param} = {value}")
-            for i in range(num_replicates):
-                print(f"Simulation {i+1}/{num_replicates}")
-                try:
-                    # Create parameter dict for this run
-                    params_dict = base_values.copy()
-                    params_dict[param] = value
-                    
-                    kpi_result = run_simulation(
-                        visualization_speed=0.001,
-                        task_interval=params_dict.get('task_interval', 3),
-                        total_tugs=params_dict.get('total_tugs', 4),
-                        simulation_time=params_dict.get('simulation_time', 100)
-                    )
-                    for kpi in kpis:
-                        if kpi in kpi_result:
-                            param_results[value][kpi].append(kpi_result[kpi])
-                except Exception as e:
-                    print(f"Error in simulation {i+1}: {e}")
-        
-        # Calculate mean values for each parameter value
-        mean_results = {value: {kpi: np.mean(param_results[value][kpi]) 
-                              for kpi in kpis if param_results[value][kpi]} 
-                      for value in param_values}
-        
-        # Calculate linear regression for each KPI to get sensitivity
-        for kpi in kpis:
-            # Check if we have results for this KPI
-            if not all(kpi in mean_results[value] for value in param_values):
-                continue
-                
-            x_values = [float(value) for value in param_values]
-            y_values = [mean_results[value][kpi] for value in param_values]
             
-            # Calculate normalized sensitivity using linear regression
-            if len(x_values) >= 2:  # Need at least 2 points for regression
-                slope, intercept, r_value, p_value, std_err = stats.linregress(x_values, y_values)
-                
-                # Normalize by the base value and the average KPI value
-                param_range_pct = (param_range[1] - param_range[0]) / base_value
-                avg_kpi = np.mean(y_values)
-                
-                # Avoid division by zero
-                if avg_kpi != 0:
-                    normalized_sensitivity = slope * base_value / avg_kpi
-                else:
-                    normalized_sensitivity = slope * base_value
-                
-                # Calculate elasticity (% change in output / % change in input)
-                elasticity = normalized_sensitivity
-                
-                # Store results
-                results.append({
-                    'parameter': param,
-                    'kpi': kpi,
-                    'base_value': base_value,
-                    'min_value': param_range[0],
-                    'max_value': param_range[1],
-                    'slope': slope,
-                    'normalized_sensitivity': normalized_sensitivity,
-                    'elasticity': elasticity,
-                    'r_squared': r_value ** 2,
-                    'p_value': p_value,
-                    'std_err': std_err,
-                    'abs_sensitivity': abs(normalized_sensitivity)
-                })
-                
-                print(f"{kpi}: Normalized Sensitivity = {normalized_sensitivity:.4f}, "
-                      f"R² = {r_value**2:.4f}, p-value = {p_value:.4f}")
-    
-    # Convert to dataframe
-    results_df = pd.DataFrame(results)
-    
-    # Create parameter rankings for each KPI
-    rankings_data = []
-    
-    for kpi in kpis:
-        kpi_results = results_df[results_df['kpi'] == kpi]
-        if not kpi_results.empty:
-            # Rank parameters by absolute sensitivity
-            ranked = kpi_results.sort_values('abs_sensitivity', ascending=False)
-            rank_dict = {row['parameter']: i+1 for i, (_, row) in enumerate(ranked.iterrows())}
+            # Add contour lines with labels
+            contour_lines = ax.contour(
+                TASK_INTERVAL_RANGE, 
+                TUGS_RANGE, 
+                data, 
+                colors='black', 
+                linewidths=0.5,
+                levels=8
+            )
+            plt.clabel(contour_lines, inline=True, fontsize=8, fmt='%.1f')
             
-            # Add to rankings data
-            rankings_data.append({
-                'KPI': kpi,
-                **{param: rank_dict.get(param, '-') for param in parameters}
-            })
+            # Add text annotations for success rate
+            for i, tug in enumerate(TUGS_RANGE):
+                for j, interval in enumerate(TASK_INTERVAL_RANGE):
+                    success_pct = 100 * success_counts[layout_name][i, j] / RUNS_PER_COMBO
+                    if success_pct < 100:  # Only show if there were errors
+                        ax.text(interval, tug, f"{success_pct:.0f}%", 
+                                ha='center', va='center', color='white', fontsize=7)
+            
+            # Add labels and title
+            ax.set_xlabel('Task Interval (s)')
+            ax.set_ylabel('Number of Tugs')
+            ax.set_title(f"{layout_name} Layout")
+            
+            # Set y-axis ticks to match the actual values
+            ax.set_yticks(TUGS_RANGE)
+            ax.set_xticks(TASK_INTERVAL_RANGE)
+            
+            # Add grid
+            ax.grid(True, linestyle='--', alpha=0.7)
+        
+        # Add colorbar with proper positioning
+        plt.tight_layout(rect=[0, 0, 0.9, 0.92])  # Make room for colorbar on right
+        cbar_ax = plt.gcf().add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+        cbar = plt.colorbar(contour, cax=cbar_ax)
+        cbar.set_label(KPI_NAMES[kpi])
+        
+        # Save figure
+        plt.savefig(f"{output_dir}/{kpi}_contour_plot.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Created contour plot for {kpi}")
     
-    rankings_df = pd.DataFrame(rankings_data)
-    
-    # Print rankings table
-    print("\n--- Parameter Sensitivity Rankings by KPI ---")
-    print(rankings_df)
-    
-    return results_df, rankings_df
+    print("All contour plots generated!")
 
-# Run the improved sensitivity analysis
-results_df, rankings_df = improved_sensitivity_analysis(
-    parameters=['task_interval', 'total_tugs', 'simulation_time', 'alpha', 'beta', 'gamma'],
-    base_values=base_values,
-    ranges=param_ranges,
-    num_samples=3,  # Number of samples within each range
-    num_replicates=3  # Number of replicates for statistical significance
-)
-
-# Save results
-results_df.to_csv('sensitivity_analysis_results.csv', index=False)
-rankings_df.to_csv('parameter_rankings.csv', index=False)
-
+if __name__ == "__main__":
+    generate_contour_plots()
 
 # if __name__ == "__main__":
 #     import matplotlib.pyplot as plt
