@@ -1,7 +1,7 @@
 """
 Run-me.py is the main file of the simulation. Run this file to run the simulation.
 """
-
+import numpy as np
 import os
 from time import sleep
 
