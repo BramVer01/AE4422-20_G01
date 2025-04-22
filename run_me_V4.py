@@ -285,6 +285,7 @@ def run_simulation(visualization_speed, task_interval,
     idle_time_history = {}     # History: for each tug, a list of accumulated idle time values per timestep
     battery_history = {}       # History: for each tug, a list of battery percentages per timestep
     time_history = []          # History of simulation time
+    collision_history = {}  # key = rounded time, value = list of (position, set of tug_ids)
 
     # Initialize layout and graph
     nodes_dict, edges_dict, start_and_goal_locations = import_layout(NODES_FILE, EDGES_FILE)
@@ -410,11 +411,36 @@ def run_simulation(visualization_speed, task_interval,
             escape_pressed = map_running(map_properties, current_states, t, departure_depot, arrival_depot, nodes_dict)
             timer.sleep(visualization_speed)
         
+        collision_tugs_by_pos = {}
+
+
         for id1 in current_states:
             for id2 in current_states:
                 if id1 < id2 and current_states[id1]["xy_pos"] == current_states[id2]["xy_pos"]:
-                    total_collisions += 1
-                    print(f"Collision detected between Tug {id1} and Tug {id2} at time {t}")
+                    pos = current_states[id1]["xy_pos"]
+                    collision_tugs_by_pos.setdefault(pos, set()).update({id1, id2})
+
+        for pos, tug_ids in collision_tugs_by_pos.items():
+            if len(tug_ids) >= 2:
+                print(f"Collision detected between tugs {sorted(tug_ids)} at position {pos} at time {t}")
+                total_collisions += 1
+
+        collision_history[round(t, 1)] = [
+            (pos, tug_ids) for pos, tug_ids in collision_tugs_by_pos.items()
+        ]
+
+        if round(t - DT, 1) in collision_history:
+            prev = collision_history[round(t - DT, 1)]
+            curr = collision_history[round(t, 1)]
+            for (pos1, tugs1) in prev:
+                for (pos2, tugs2) in curr:
+                    if pos1 == pos2 and len(tugs1) >= 3 and len(tugs2) >= 3:
+                        print(f"\n❌ ERROR: Unsolvable 3-tug collision at {pos1} during time {t - DT} and {t}.")
+                        raise RuntimeError("Unsolvable collision detected – simulation terminated.")
+
+
+
+
 
         # --- Tasks Assignment ---
         tasks_available = departure_depot.tasks + arrival_depot.tasks
@@ -616,84 +642,159 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import stats
 
+# if __name__ == "__main__":
+#     # Simulation settings
+#     SIMULATION_TIME   = 100
+#     DELTA_T           = 0.5
+#     DT                = 0.1
+
+#     # Batch parameters
+#     tug_counts        = [4, 6, 8, 10]
+#     task_intervals    = [1, 3, 5, 7, 9]
+#     n_runs_per_combo  = 10  # increase replications for stability
+
+#     def mean_ci(data, confidence=0.95):
+#         a    = np.array(data, dtype=float)
+#         mean = np.nanmean(a)
+#         se   = stats.sem(a, nan_policy='omit')
+#         h    = se * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
+#         return mean, h
+
+#     plot_data = {n: {"ti": [], "mean_rate": [], "ci_rate": []} for n in tug_counts}
+#     summary   = []
+
+#     print("Running completion-rate batch over fleet sizes and task intervals...")
+#     for n in tug_counts:
+#         for ti in task_intervals:
+#             rates = []
+#             print(f"  Testing {n} tugs, task interval={ti}s...")
+#             for _ in range(n_runs_per_combo):
+#                 res = run_simulation(
+#                     visualization_speed=0.0,
+#                     task_interval=ti,
+#                     total_tugs=n,
+#                     simulation_time=SIMULATION_TIME
+#                 )
+#                 completed = res["tasks_completed"]
+#                 # Derive total tasks generated using tasks_difference
+#                 generated = completed + res.get("tasks_difference", 0)
+#                 # Ensure generated >= completed
+#                 generated = max(generated, completed)
+#                 rate = completed / generated if generated > 0 else np.nan
+#                 # Clamp to [0,1]
+#                 rate = np.clip(rate, 0.0, 1.0)
+#                 rates.append(rate)
+
+#             mean_rate, ci_rate = mean_ci(rates)
+#             plot_data[n]["ti"].append(ti)
+#             plot_data[n]["mean_rate"].append(mean_rate)
+#             plot_data[n]["ci_rate"].append(ci_rate)
+
+#             summary.append({
+#                 "Tugs": n,
+#                 "Task Interval": ti,
+#                 "Mean Completion Rate": mean_rate,
+#                 "95% CI": ci_rate
+#             })
+#             print(f"    → Completion Rate = {mean_rate:.3f} ± {ci_rate:.3f}")
+
+#     # Plot completion rate vs. task interval for each fleet size
+#     plt.figure(figsize=(10, 6))
+#     for n in tug_counts:
+#         plt.errorbar(
+#             plot_data[n]["ti"],
+#             plot_data[n]["mean_rate"],
+#             yerr=plot_data[n]["ci_rate"],
+#             fmt='o-',
+#             capsize=4,
+#             label=f"{n} tugs"
+#         )
+#     plt.xlabel("Task Interval (s)")
+#     plt.ylabel("Mean Completion Rate")
+#     plt.title("Effect of Task Interval on Completion Rate for Different Fleet Sizes")
+#     plt.legend()
+#     plt.tight_layout()
+#     plt.show()
+
+#     # Summary table
+#     df = pd.DataFrame(summary)
+#     print("\nCompletion Rate Summary:")
+#     print(df.to_string(index=False))
+
+
+# This is to determine number of runs
 if __name__ == "__main__":
-    # Simulation settings
-    SIMULATION_TIME   = 100
-    DELTA_T           = 0.5
-    DT                = 0.1
+    num_runs = 400
+    visualization = False
+    visualization_speed = 0.0001 
 
-    # Batch parameters
-    tug_counts        = [4, 6, 8, 10]
-    task_intervals    = [1, 3, 5, 7, 9]
-    n_runs_per_combo  = 10  # increase replications for stability
+    kpis = {
+        "collisions": [],
+        "tasks_completed": [],
+        "avg_execution_time": [],
+        "avg_total_time": [],
+        "delays": []
+    }
 
-    def mean_ci(data, confidence=0.95):
-        a    = np.array(data, dtype=float)
-        mean = np.nanmean(a)
-        se   = stats.sem(a, nan_policy='omit')
-        h    = se * stats.t.ppf((1 + confidence) / 2., len(a) - 1)
-        return mean, h
+    cv_tracking = {
+        key: [] for key in kpis
+    }
 
-    plot_data = {n: {"ti": [], "mean_rate": [], "ci_rate": []} for n in tug_counts}
-    summary   = []
+    def compute_cv(data):
+        if len(data) < 2:
+            return 0
+        mean = np.mean(data)
+        std = np.std(data, ddof=1)
+        return std / mean if mean != 0 else 0
+ 
+    # --- Run simulation N times ---
+    epsilon = 0.01
+    window_size = 25
+    early_stop = False
 
-    print("Running completion-rate batch over fleet sizes and task intervals...")
-    for n in tug_counts:
-        for ti in task_intervals:
-            rates = []
-            print(f"  Testing {n} tugs, task interval={ti}s...")
-            for _ in range(n_runs_per_combo):
-                res = run_simulation(
-                    visualization_speed=0.0,
-                    task_interval=ti,
-                    total_tugs=n,
-                    simulation_time=SIMULATION_TIME
-                )
-                completed = res["tasks_completed"]
-                # Derive total tasks generated using tasks_difference
-                generated = completed + res.get("tasks_difference", 0)
-                # Ensure generated >= completed
-                generated = max(generated, completed)
-                rate = completed / generated if generated > 0 else np.nan
-                # Clamp to [0,1]
-                rate = np.clip(rate, 0.0, 1.0)
-                rates.append(rate)
+    for i in range(1, num_runs + 1):
+        print(f"\n--- Running simulation {i} ---")
 
-            mean_rate, ci_rate = mean_ci(rates)
-            plot_data[n]["ti"].append(ti)
-            plot_data[n]["mean_rate"].append(mean_rate)
-            plot_data[n]["ci_rate"].append(ci_rate)
+        try:
+            kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+        except RuntimeError as e:
+            print(f"❌ Simulation {i} failed: {e}")
+            continue  # Skip this run, continue with the next
 
-            summary.append({
-                "Tugs": n,
-                "Task Interval": ti,
-                "Mean Completion Rate": mean_rate,
-                "95% CI": ci_rate
-            })
-            print(f"    → Completion Rate = {mean_rate:.3f} ± {ci_rate:.3f}")
+        for key in kpis:
+            value = kpi[key]
+            if key == "delays" and isinstance(value, list):  # Fix for delays being a list
+                value = sum(v alue) / len(value) if value else 0  # Convert to  average
+            kpis[key].append(value)
+            cv = compute_cv(kpis[key])
+            cv_tracking[key].append(cv)
 
-    # Plot completion rate vs. task interval for each fleet size
-    plt.figure(figsize=(10, 6))
-    for n in tug_counts:
-        plt.errorbar(
-            plot_data[n]["ti"],
-            plot_data[n]["mean_rate"],
-            yerr=plot_data[n]["ci_rate"],
-            fmt='o-',
-            capsize=4,
-            label=f"{n} tugs"
-        )
-    plt.xlabel("Task Interval (s)")
-    plt.ylabel("Mean Completion Rate")
-    plt.title("Effect of Task Interval on Completion Rate for Different Fleet Sizes")
-    plt.legend()
+            #  Early stopping if, over the last window_size iterations the acceptable change threshold epsilon is not exceeded.
+        if i >= window_size:
+            stable = True
+            for key in cv_tracking:
+                recent_vals = cv_tracking[key][-window_size:]
+                if max(recent_vals) - min(recent_vals) > epsilon:
+                    stable = False
+                    break
+            if stable:
+                print(f"\n✅ Cv stabilized across all KPIs after {i} runs.")
+                early_stop = True
+                break
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for key in cv_tracking:
+        ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
+
+
+    ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
+    ax.set_xlabel("Number of Simulation Runs")
+    ax.set_ylabel("Coefficient of Variation (Cv)")
+    ax.legend()
+    ax.grid(True)
     plt.tight_layout()
     plt.show()
-
-    # Summary table
-    df = pd.DataFrame(summary)
-    print("\nCompletion Rate Summary:")
-    print(df.to_string(index=False))
 
 
 # '''Baseline Model Performance'''
