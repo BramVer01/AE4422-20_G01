@@ -779,18 +779,13 @@ if __name__ == "__main__":
     import numpy as np
     import matplotlib.pyplot as plt
     import pandas as pd
-    import time
     from scipy import stats
 
     # ---- Batch parameters ----
-    tug_counts         = [2, 4, 6, 8, 10, 12, 14]
-    task_intervals     = [1, 2, 3, 5, 7]
-    n_runs_per_combo   = 1
-    baseline_interval  = task_intervals[len(task_intervals)//2]
-
-    SIM_TIME = 300
-    visualization = False
-    visualization_speed = 0.0
+    tug_counts       = [2, 4, 6, 8, 9, 10, 12, 14]
+    task_intervals   = [1, 2, 3, 5, 7]
+    n_runs_per_combo = 100    # increase for smoother heatmaps
+    SIM_TIME         = 300
 
     def mean_ci(data, confidence=0.95):
         a = np.array(data, dtype=float)
@@ -805,37 +800,49 @@ if __name__ == "__main__":
     # ---- prepare containers ----
     delay_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
     compl_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
-    cpu_data   = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
-    util_data  = {
-        "tugs": tug_counts,
-        "U_mean":[], "U_ci":[],
-        "I_mean":[], "I_ci":[],
-        "M_mean":[], "M_ci":[]
-    }
+    util_data  = {n:{"ti":[], "U_mean":[], "U_ci":[]} for n in tug_counts}
     summary_records = []
 
     print("Starting batch simulations...")
     for n in tug_counts:
         for ti in task_intervals:
-            delays, rates, cpus = [], [], []
-            print(f" Fleet={n}, interval={ti}s...", end="")
-            for _ in range(n_runs_per_combo):
-                k = run_simulation(
-                    visualization_speed=visualization_speed,
-                    task_interval=ti,
-                    total_tugs=n,
-                    simulation_time=SIM_TIME
-                )
-                delays.append(np.mean(k["delays"]) if k["delays"] else np.nan)
-                generated = k["tasks_completed"] + k.get("tasks_difference", 0)
-                rate = (k["tasks_completed"]/generated) if generated>0 else np.nan
-                rates.append(np.clip(rate,0,1))
-                if "cpu_runtime" in k:
-                    cpus.append(k["cpu_runtime"])
+            delays, rates, U_runs = [], [], []
+            print(f" Fleet={n}, interval={ti}s...", end="", flush=True)
+            for run_i in range(n_runs_per_combo):
+                try:
+                    k = run_simulation(
+                        visualization_speed=0.0,
+                        task_interval=ti,
+                        total_tugs=n,
+                        simulation_time=SIM_TIME
+                    )
+                except Exception as e:
+                    print(f"\n  Warning: sim error on run {run_i+1}: {e}", flush=True)
+                    continue
+
+                # collect delay
+                delays.extend(k.get("delays", []))
+
+                # collect completion rate
+                gen = k.get("tasks_completed", 0) + k.get("tasks_difference", 0)
+                rate = (k["tasks_completed"]/gen) if gen>0 else np.nan
+                rates.append(np.clip(rate, 0, 1))
+
+                # collect utilization ratio
+                times = k["tug_state_times"]
+                idle = sum(v["idle"]           for v in times.values())
+                move = sum(v["moving_to_task"] for v in times.values())
+                exec_ = sum(v["executing"]     for v in times.values())
+                tot = idle + move + exec_
+                if tot>0:
+                    U_runs.append(exec_/tot)
+
+            # compute stats
             md, hd = mean_ci(delays)
             mr, hr = mean_ci(rates)
-            mc, hc = mean_ci(cpus) if cpus else (np.nan, np.nan)
+            um, uh = mean_ci(U_runs)
 
+            # store
             delay_data[n]["ti"].append(ti)
             delay_data[n]["mean"].append(md)
             delay_data[n]["ci"].append(hd)
@@ -844,156 +851,119 @@ if __name__ == "__main__":
             compl_data[n]["mean"].append(mr)
             compl_data[n]["ci"].append(hr)
 
-            cpu_data[n]["ti"].append(ti)
-            cpu_data[n]["mean"].append(mc)
-            cpu_data[n]["ci"].append(hc)
+            util_data[n]["ti"].append(ti)
+            util_data[n]["U_mean"].append(um)
+            util_data[n]["U_ci"].append(uh)
 
             summary_records.append({
-                "Tugs":n, "Interval":ti,
-                "Mean Delay":f"{md:.2f}±{hd:.2f}",
-                "Completion":f"{mr:.2f}±{hr:.2f}",
-                "CPU Time":f"{mc:.2f}±{hc:.2f}"
+                "Tugs": n, "Interval": ti,
+                "Mean Delay":      f"{md:.2f}±{hd:.2f}",
+                "Completion Rate": f"{mr:.2f}±{hr:.2f}",
+                "Exec. Ratio (U)": f"{um:.2f}±{uh:.2f}"
             })
-            print(" done")
+            print(" done", flush=True)
 
-        # Utilization at baseline_interval
-        U_vals, I_vals, M_vals = [], [], []
-        for _ in range(n_runs_per_combo):
-            k = run_simulation(
-                visualization_speed=visualization_speed,
-                task_interval=baseline_interval,
-                total_tugs=n,
-                simulation_time=SIM_TIME
-            )
-            totals = sum(v for v in k["tug_state_times"].values())
-            idle = sum(v["idle"] for v in k["tug_state_times"].values())
-            move = sum(v["moving_to_task"] for v in k["tug_state_times"].values())
-            exec_ = sum(v["executing"] for v in k["tug_state_times"].values())
-            tot = idle + move + exec_
-            if tot>0:
-                U_vals.append(exec_/tot)
-                I_vals.append(idle/tot)
-                M_vals.append(move/tot)
-        u_m, u_h = mean_ci(U_vals)
-        i_m, i_h = mean_ci(I_vals)
-        m_m, m_h = mean_ci(M_vals)
-        util_data["U_mean"].append(u_m); util_data["U_ci"].append(u_h)
-        util_data["I_mean"].append(i_m); util_data["I_ci"].append(i_h)
-        util_data["M_mean"].append(m_m); util_data["M_ci"].append(m_h)
-
-    # Print summary
+    # summary table
     summary_df = pd.DataFrame(summary_records)
     print("\nBatch summary:")
     print(summary_df.to_string(index=False))
 
-    # Plot #1: Delay vs Interval
-    plt.figure(figsize=(10,6))
-    for n in tug_counts:
-        plt.errorbar(delay_data[n]["ti"], delay_data[n]["mean"],
-                     yerr=delay_data[n]["ci"], fmt='o-', capsize=4, label=f"{n} tugs")
+    # prepare meshgrid
+    X, Y = np.meshgrid(task_intervals, tug_counts)
+
+    # Delay heatmap
+    Z_delay = np.vstack([delay_data[n]["mean"] for n in tug_counts])
+    plt.figure(figsize=(8,6))
+    cp = plt.contourf(X, Y, Z_delay, levels=20, cmap="viridis")
+    plt.colorbar(cp, label="Mean Delay (s)")
     plt.xlabel("Task Interval (s)")
-    plt.ylabel("Mean Delay (s)")
-    plt.title("Delay vs Task Interval")
-    plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+    plt.ylabel("Number of Tugs")
+    plt.title("Mean Delay Heatmap")
+    plt.tight_layout()
+    plt.show()
 
-    # Plot #2: Completion Rate vs Interval
-    plt.figure(figsize=(10,6))
-    for n in tug_counts:
-        plt.errorbar(compl_data[n]["ti"], compl_data[n]["mean"],
-                     yerr=compl_data[n]["ci"], fmt='s--', capsize=4, label=f"{n} tugs")
+    # Completion rate heatmap
+    Z_comp = np.vstack([compl_data[n]["mean"] for n in tug_counts])
+    plt.figure(figsize=(8,6))
+    cp = plt.contourf(X, Y, Z_comp, levels=20, cmap="viridis")
+    plt.colorbar(cp, label="Mean Completion Rate")
     plt.xlabel("Task Interval (s)")
-    plt.ylabel("Mean Completion Rate")
-    plt.title("Completion Rate vs Task Interval")
-    plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+    plt.ylabel("Number of Tugs")
+    plt.title("Completion Rate Heatmap")
+    plt.tight_layout()
+    plt.show()
 
-    # Plot #3: CPU Time vs Interval (skip NaNs)
-    plt.figure(figsize=(10,6))
-    for n in tug_counts:
-        ti_arr, m_arr, ci_arr = [], [], []
-        for ti, m, ci in zip(cpu_data[n]["ti"], cpu_data[n]["mean"], cpu_data[n]["ci"]):
-            if not np.isnan(m):
-                ti_arr.append(ti); m_arr.append(m); ci_arr.append(ci)
-        if ti_arr:
-            plt.errorbar(ti_arr, m_arr, yerr=ci_arr, fmt='d-.', capsize=4, label=f"{n} tugs")
+    # Execution ratio heatmap
+    Z_exec = np.vstack([util_data[n]["U_mean"] for n in tug_counts])
+    plt.figure(figsize=(8,6))
+    cp = plt.contourf(X, Y, Z_exec, levels=20, cmap="viridis")
+    plt.colorbar(cp, label="Mean Execution Ratio")
     plt.xlabel("Task Interval (s)")
-    plt.ylabel("Mean CPU Time (s)")
-    plt.title("CPU Time vs Task Interval")
-    plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
-
-    # Plot #4: Utilization vs Fleet Size
-    plt.figure(figsize=(10,6))
-    plt.errorbar(util_data["tugs"], util_data["U_mean"], yerr=util_data["U_ci"],
-                 fmt='o-', capsize=4, label="Execution (U)")
-    plt.errorbar(util_data["tugs"], util_data["I_mean"], yerr=util_data["I_ci"],
-                 fmt='s--', capsize=4, label="Idle (I)")
-    plt.errorbar(util_data["tugs"], util_data["M_mean"], yerr=util_data["M_ci"],
-                 fmt='d-.', capsize=4, label="Move-to-Task (M)")
-    plt.xlabel("Number of Taxi-Bots")
-    plt.ylabel("Mean Time Ratio")
-    plt.title(f"Utilization Ratios @ Interval={baseline_interval}s")
-    plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
-
+    plt.ylabel("Number of Tugs")
+    plt.title("Execution Ratio Heatmap")
+    plt.tight_layout()
+    plt.show()
 
 
 
 '''Code to check coefficient of variations'''
 
-if __name__ == "__main__":
-    num_runs = 100  # Fixed number of iterations
-    visualization = False
-    visualization_speed = 0.0001
-    errors = 0
+# if __name__ == "__main__":
+#     num_runs = 100  # Fixed number of iterations
+#     visualization = False
+#     visualization_speed = 0.0001
+#     errors = 0
 
-    kpis = {
-        "collisions": [],
-        "tasks_completed": [],
-        "avg_execution_time": [],
-        "avg_total_time": [],
-        "delays": []
-    }
+#     kpis = {
+#         "collisions": [],
+#         "tasks_completed": [],
+#         "avg_execution_time": [],
+#         "avg_total_time": [],
+#         "delays": []
+#     }
 
-    cv_tracking = {
-        key: [] for key in kpis
-    }
+#     cv_tracking = {
+#         key: [] for key in kpis
+#     }
 
-    def compute_cv(data):
-        if len(data) < 2:
-            return 0
-        mean = np.mean(data)
-        std = np.std(data, ddof=1)
-        return std / mean if mean != 0 else 0
+#     def compute_cv(data):
+#         if len(data) < 2:
+#             return 0
+#         mean = np.mean(data)
+#         std = np.std(data, ddof=1)
+#         return std / mean if mean != 0 else 0
 
-    for i in range(1, num_runs + 1):
-        print(f"\n--- Running simulation {i} ---")
+#     for i in range(1, num_runs + 1):
+#         print(f"\n--- Running simulation {i} ---")
 
-        try:
-            kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
-        except RuntimeError as e:
-            print(f"❌ Simulation {i} failed: {e}")  # For deadlock cases
-            errors += 1
-            continue  
+#         try:
+#             kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+#         except RuntimeError as e:
+#             print(f"❌ Simulation {i} failed: {e}")  # For deadlock cases
+#             errors += 1
+#             continue  
 
-        for key in kpis:
-            value = kpi[key]
-            if key == "delays" and isinstance(value, list):
-                value = sum(value) / len(value) if value else 0  
-            kpis[key].append(value)
-            cv = compute_cv(kpis[key])
-            cv_tracking[key].append(cv)
+#         for key in kpis:
+#             value = kpi[key]
+#             if key == "delays" and isinstance(value, list):
+#                 value = sum(value) / len(value) if value else 0  
+#             kpis[key].append(value)
+#             cv = compute_cv(kpis[key])
+#             cv_tracking[key].append(cv)
 
-    # Plot Cv progression over runs
-    fig, ax = plt.subplots(figsize=(10, 6))
-    for key in cv_tracking:
-        ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
+#     # Plot Cv progression over runs
+#     fig, ax = plt.subplots(figsize=(10, 6))
+#     for key in cv_tracking:
+#         ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
 
-    ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
-    ax.set_xlabel("Number of Simulation Runs")
-    ax.set_ylabel("Coefficient of Variation (Cv)")
-    ax.legend()
-    ax.grid(True)
-    print(errors)
-    plt.tight_layout()
-    plt.show()
+#     ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
+#     ax.set_xlabel("Number of Simulation Runs")
+#     ax.set_ylabel("Coefficient of Variation (Cv)")
+#     ax.legend()
+#     ax.grid(True)
+#     print(errors)
+#     plt.tight_layout()
+#     plt.show()
 
 
 
