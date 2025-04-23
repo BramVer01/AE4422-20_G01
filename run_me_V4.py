@@ -722,9 +722,10 @@ from scipy import stats
 #     print(df.to_string(index=False))
 
 
-# This is to determine number of runs
+# Code to check coefficient of variations
+
 if __name__ == "__main__":
-    num_runs = 400
+    num_runs = 100  # Fixed number of iterations
     visualization = False
     visualization_speed = 0.0001 
 
@@ -746,11 +747,6 @@ if __name__ == "__main__":
         mean = np.mean(data)
         std = np.std(data, ddof=1)
         return std / mean if mean != 0 else 0
- 
-    # --- Run simulation N times ---
-    epsilon = 0.01
-    window_size = 25
-    early_stop = False
 
     for i in range(1, num_runs + 1):
         print(f"\n--- Running simulation {i} ---")
@@ -758,35 +754,21 @@ if __name__ == "__main__":
         try:
             kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
         except RuntimeError as e:
-            print(f"❌ Simulation {i} failed: {e}")
-            continue  # Skip this run, continue with the next
+            print(f"❌ Simulation {i} failed: {e}")  # For deadlock cases
+            continue  
 
         for key in kpis:
             value = kpi[key]
-            if key == "delays" and isinstance(value, list):  # Fix for delays being a list
-                value = sum(v alue) / len(value) if value else 0  # Convert to  average
+            if key == "delays" and isinstance(value, list):
+                value = sum(value) / len(value) if value else 0  
             kpis[key].append(value)
             cv = compute_cv(kpis[key])
             cv_tracking[key].append(cv)
 
-            #  Early stopping if, over the last window_size iterations the acceptable change threshold epsilon is not exceeded.
-        if i >= window_size:
-            stable = True
-            for key in cv_tracking:
-                recent_vals = cv_tracking[key][-window_size:]
-                if max(recent_vals) - min(recent_vals) > epsilon:
-                    stable = False
-                    break
-            if stable:
-                print(f"\n✅ Cv stabilized across all KPIs after {i} runs.")
-                early_stop = True
-                break
-
-    # Plot
+    # Plot Cv progression over runs
     fig, ax = plt.subplots(figsize=(10, 6))
     for key in cv_tracking:
         ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
-
 
     ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
     ax.set_xlabel("Number of Simulation Runs")
@@ -795,6 +777,86 @@ if __name__ == "__main__":
     ax.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+
+
+
+
+# This is to determine number of runs
+# if __name__ == "__main__":
+#     num_runs = 400
+#     visualization = False
+#     visualization_speed = 0.0001 
+
+#     kpis = {
+#         "collisions": [],
+#         "tasks_completed": [],
+#         "avg_execution_time": [],
+#         "avg_total_time": [],
+#         "delays": []
+#     }
+
+#     cv_tracking = {
+#         key: [] for key in kpis
+#     }
+
+#     def compute_cv(data):
+#         if len(data) < 2:
+#             return 0
+#         mean = np.mean(data)
+#         std = np.std(data, ddof=1)
+#         return std / mean if mean != 0 else 0
+ 
+  
+#     epsilon = 0.03
+#     window_size = 20
+#     early_stop = False
+
+#     for i in range(1, num_runs + 1):
+#         print(f"\n--- Running simulation {i} ---")
+
+#         try:
+#             kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+#         except RuntimeError as e:
+#             print(f"❌ Simulation {i} failed: {e}") # For when model gets into a deadlock with 3 tugs
+#             continue  
+
+#         for key in kpis:
+#             value = kpi[key]
+#             if key == "delays" and isinstance(value, list):  # Fix for delays being a list
+#                 value = sum(value) / len(value) if value else 0  
+#             kpis[key].append(value)
+#             cv = compute_cv(kpis[key])
+#             cv_tracking[key].append(cv)
+
+#         if i >= window_size:
+#             stable = True
+#             for key in cv_tracking:
+#                 recent_vals = cv_tracking[key][-window_size:]
+#                 if max(recent_vals) - min(recent_vals) > epsilon:
+#                     stable = False
+#                     break
+#             if stable:
+#                 print(f"\n✅ Cv stabilized across all KPIs after {i} runs.")
+#                 early_stop = True
+#                 break
+
+#     # Plot
+#     fig, ax = plt.subplots(figsize=(10, 6))
+#     for key in cv_tracking:
+#         ax.plot(range(1, len(cv_tracking[key]) + 1), cv_tracking[key], label=f"{key} Cv")
+
+
+#     ax.set_title("Coefficient of Variation (Cv) vs Number of Runs")
+#     ax.set_xlabel("Number of Simulation Runs")
+#     ax.set_ylabel("Coefficient of Variation (Cv)")
+#     ax.legend()
+#     ax.grid(True)
+#     plt.tight_layout()
+#     plt.show()
+
+
 
 
 # '''Baseline Model Performance'''
@@ -1727,6 +1789,85 @@ if __name__ == "__main__":
 
 
 
+
+
+# Simulation block for running of hypotheses tests
+# if __name__ == "__main__":
+#     import pandas as pd
+#     from scipy.stats import ttest_ind, mannwhitneyu
+
+#     num_runs = 100
+#     visualization = False
+#     visualization_speed = 0.0001
+
+#     ttest_kpis = ["collisions", "tasks_completed", "delay", "execution_time"]  
+#     mannwhitney_kpis = ["task_time", "idle_time", "cpu_time", "error_rate"]    
+#     all_kpis = ttest_kpis + mannwhitney_kpis
+
+#     scenario_A = {k: [] for k in all_kpis}  # 8 tugs, interval 2
+#     scenario_B = {k: [] for k in all_kpis}  # 10 tugs, interval 2
+#     scenario_C = {k: [] for k in all_kpis}  # 8 tugs, interval 3
+
+#     def run_and_extract_kpis(total_tugs, task_interval):
+#         kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
+#         return {
+#             "collisions": kpi["collisions"],
+#             "tasks_completed": kpi["tasks_completed"],
+#             "delay": sum(kpi["delays"]) / len(kpi["delays"]) if kpi["delays"] else 0,
+#             "execution_time": kpi["avg_execution_time"],
+#             "task_time": kpi["avg_total_time"],
+#             "idle_time": kpi["avg_state_times"]["idle"],
+#             "cpu_time": kpi["avg_state_times"]["executing"], 
+#             "error_rate": kpi["tasks_difference"] / max(kpi["tasks_completed"] + kpi["tasks_difference"], 1)
+#         }
+
+#     # Scenario A (baseline)
+#     print("\n--- Running Scenario A: 8 tugs, task interval = 2 ---")
+#     for i in range(num_runs):
+#         print(f"A - Run {i + 1}")
+#         kpi = run_and_extract_kpis(total_tugs=8, task_interval=2)
+#         for key in all_kpis:
+#             scenario_A[key].append(kpi[key])
+
+#     # Scenario B (more tugs)
+#     print("\n--- Running Scenario B: 10 tugs, task interval = 2 ---")
+#     for i in range(num_runs):
+#         print(f"B - Run {i + 1}")
+#         kpi = run_and_extract_kpis(total_tugs=10, task_interval=2)
+#         for key in all_kpis:
+#             scenario_B[key].append(kpi[key])
+
+#     # Scenario C (slower task rate)
+#     print("\n--- Running Scenario C: 8 tugs, task interval = 3 ---")
+#     for i in range(num_runs):
+#         print(f"C - Run {i + 1}")
+#         kpi = run_and_extract_kpis(total_tugs=8, task_interval=3)
+#         for key in all_kpis:
+#             scenario_C[key].append(kpi[key])
+
+#     results = []
+
+#     # Compare A vs B 
+#     for key in ttest_kpis:
+#         stat, p = ttest_ind(scenario_A[key], scenario_B[key])
+#         results.append((f"A vs B – {key}", "Independent t-test", p))
+#     for key in mannwhitney_kpis:
+#         stat, p = mannwhitneyu(scenario_A[key], scenario_B[key], alternative='two-sided')
+#         results.append((f"A vs B – {key}", "Mann-Whitney U-test", p))
+
+#     # Compare A vs C
+#     for key in ttest_kpis:
+#         stat, p = ttest_ind(scenario_A[key], scenario_C[key])
+#         results.append((f"A vs C – {key}", "Independent t-test", p))
+#     for key in mannwhitney_kpis:
+#         stat, p = mannwhitneyu(scenario_A[key], scenario_C[key], alternative='two-sided')
+#         results.append((f"A vs C – {key}", "Mann-Whitney U-test", p))
+
+#     # Display results 
+#     results_df = pd.DataFrame(results, columns=["Comparison", "Test", "P-Value"])
+#     results_df["Statistical Conclusion"] = results_df["P-Value"].apply(lambda p: "Rejected H₀" if p < 0.05 else "Accepted H₀")
+#     print("\n--- Statistical Test Results ---")
+#     print(results_df)
 
 
 
