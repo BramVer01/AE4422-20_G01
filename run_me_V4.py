@@ -727,7 +727,8 @@ from scipy import stats
 if __name__ == "__main__":
     num_runs = 100  # Fixed number of iterations
     visualization = False
-    visualization_speed = 0.0001 
+    visualization_speed = 0.0001
+    errors = 0
 
     kpis = {
         "collisions": [],
@@ -755,6 +756,7 @@ if __name__ == "__main__":
             kpi = run_simulation(visualization_speed, task_interval, total_tugs, SIMULATION_TIME)
         except RuntimeError as e:
             print(f"❌ Simulation {i} failed: {e}")  # For deadlock cases
+            errors += 1
             continue  
 
         for key in kpis:
@@ -775,6 +777,7 @@ if __name__ == "__main__":
     ax.set_ylabel("Coefficient of Variation (Cv)")
     ax.legend()
     ax.grid(True)
+    print(errors)
     plt.tight_layout()
     plt.show()
 
