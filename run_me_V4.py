@@ -434,8 +434,8 @@ def run_simulation(visualization_speed, task_interval,
             curr = collision_history[round(t, 1)]
             for (pos1, tugs1) in prev:
                 for (pos2, tugs2) in curr:
-                    if pos1 == pos2 and len(tugs1) >= 3 and len(tugs2) >= 3:
-                        print(f"\n❌ ERROR: Unsolvable 3-tug collision at {pos1} during time {t - DT} and {t}.")
+                    if pos1 == pos2 and len(tugs1) >= 2 and len(tugs2) >= 2:
+                        print(f"\n❌ ERROR: Unsolvable 2+-tug collision at {pos1} during time {t - DT} and {t}.")
                         raise RuntimeError("Unsolvable collision detected – simulation terminated.")
 
 
@@ -783,7 +783,7 @@ if __name__ == "__main__":
 
 
 
-# This is to determine number of runs
+# # This is to determine number of runs
 # if __name__ == "__main__":
 #     num_runs = 400
 #     visualization = False
