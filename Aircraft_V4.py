@@ -284,6 +284,7 @@ class Tug(object):
                 nodes_dict, start_node, goal_node, heuristics, t, delta_t, self, constraints
             )
             if success:
+                print("Path (prioritized) for tug", self.id, ":", path_agent)
                 self.path_to_goal = path_agent[1:]
                 next_node_id = self.path_to_goal[0][0]
                 self.from_to = [path_agent[0][0], next_node_id]
