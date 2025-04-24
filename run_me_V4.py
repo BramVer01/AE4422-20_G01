@@ -630,147 +630,209 @@ def run_simulation(visualization_speed, task_interval,
          "avg_state_times": avg_state_times
     }
 
-
-
-
-'''Testing normality of KPIs'''
-def plot_all_distributions(kpi_data_dict):
-    import matplotlib.pyplot as plt
+'''BATTERY DISCHARGE GRAPH'''
+def main():
     import numpy as np
-    from scipy.stats import norm
-    num_plots = len(kpi_data_dict)
-    cols = 4
-    rows = (num_plots + cols - 1) // cols
-    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-    axes = axes.flatten() if num_plots > 1 else [axes]
-    for i, (name, data) in enumerate(kpi_data_dict.items()):
-        ax = axes[i]
-        ax.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
-        mu, std = np.mean(data), np.std(data)
-        xmin, xmax = ax.get_xlim()
-        # x = np.linspace(xmin, xmax, 100)
-        # p = norm.pdf(x, mu, std)
-        # ax.plot(x, p, 'k', linewidth=2)
-        # ax.set_title(f"{name}\nMean: {mu:.2f}, Std: {std:.2f}")
-        ax.set_xlabel(name)
-        ax.set_ylabel("Probability Density")
-        ax.grid(True)
-    for j in range(i + 1, len(axes)):
-        fig.delaxes(axes[j])
+    import matplotlib.pyplot as plt
+    from scipy import stats
+
+    # Simulation settings
+    SIMULATION_TIME = 300
+    visualization = False
+    visualization_speed = 0.1
+    task_interval = 2        # seconds between task generations
+    total_tugs = 8           # fleet size
+    n_runs = 10               # number of simulation runs
+
+    # Containers for battery histories
+    battery_time_series = {}   # tug_id -> list of battery arrays
+    common_time_history = None
+
+    # Run simulations and collect battery data
+    for run in range(n_runs):
+        try: 
+            results = run_simulation(
+                visualization_speed=visualization,
+                task_interval=task_interval,
+                total_tugs=total_tugs,
+                simulation_time=SIMULATION_TIME
+            )
+            if common_time_history is None:
+                common_time_history = np.array(results["time_history"])
+            for tug_id, batt in results["battery_history"].items():
+                battery_time_series.setdefault(tug_id, []).append(np.array(batt))
+        except Exception as e:
+            print(f"[ERROR] Simulation run {run+1} failed: {e}")
+            continue  # Optionally continue with next run
+
+    # Compute mean and 95% CI for battery percentage
+    battery_time_avg = {}
+    battery_time_ci = {}
+    for tug_id, runs in battery_time_series.items():
+        data = np.vstack(runs)  # shape: (n_runs, time_steps)
+        mean_series = np.mean(data, axis=0)
+        sem = stats.sem(data, axis=0, nan_policy='omit')
+        ci = sem * stats.t.ppf((1 + 0.95) / 2., n_runs - 1)
+        battery_time_avg[tug_id] = mean_series
+        battery_time_ci[tug_id] = ci
+
+    # Plot battery percentage over time
+    fig, ax = plt.subplots(figsize=(12, 6))
+    for tug_id, mean_series in battery_time_avg.items():
+        ci_series = battery_time_ci[tug_id]
+        ax.plot(common_time_history, mean_series, label=f"Tug {tug_id}")
+        ax.fill_between(common_time_history,
+                        mean_series - ci_series,
+                        mean_series + ci_series,
+                        alpha=0.2)
+    ax.set_xlabel("Simulation Time (s)")
+    ax.set_ylabel("Battery Percentage (%)")
+    ax.set_title("Battery Percentage Over Time (Mean ± 95% CI)")
+    ax.legend(fontsize='small')
+    ax.grid(True)
     plt.tight_layout()
     plt.show()
 
 
-if __name__ == "__main__":
-    # turn off pygame visualization during batch runs
-    visualization = False
 
-    num_runs = 200               # number of independent replications
-    tug_count = 8                # fleet size under test
-    task_interval = 3            # seconds between task generations
-    SIMULATION_TIME = 300
+'''Testing normality of KPIs'''
+# def plot_all_distributions(kpi_data_dict):
+#     import matplotlib.pyplot as plt
+#     import numpy as np
+#     from scipy.stats import norm
+#     num_plots = len(kpi_data_dict)
+#     cols = 4
+#     rows = (num_plots + cols - 1) // cols
+#     fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+#     axes = axes.flatten() if num_plots > 1 else [axes]
+#     for i, (name, data) in enumerate(kpi_data_dict.items()):
+#         ax = axes[i]
+#         ax.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
+#         mu, std = np.mean(data), np.std(data)
+#         xmin, xmax = ax.get_xlim()
+#         # x = np.linspace(xmin, xmax, 100)
+#         # p = norm.pdf(x, mu, std)
+#         # ax.plot(x, p, 'k', linewidth=2)
+#         # ax.set_title(f"{name}\nMean: {mu:.2f}, Std: {std:.2f}")
+#         ax.set_xlabel(name)
+#         ax.set_ylabel("Probability Density")
+#         ax.grid(True)
+#     for j in range(i + 1, len(axes)):
+#         fig.delaxes(axes[j])
+#     plt.tight_layout()
+#     plt.show()
 
-    # prepare empty lists for each KPI
-    collisions_list            = []
-    tasks_completed_list       = []
-    avg_execution_time_list    = []
-    total_task_time_list       = []
-    avg_distance_list          = []
-    avg_delay_list             = []
-    idle_time_list             = []
-    move_to_task_time_list     = []
-    cpu_time_list              = []
-    error_count = 0
 
-    for run in range(1, num_runs + 1):
-        print(f"\n--- Simulation run {run}/{num_runs} ---")
-        try:
-            kpi = run_simulation(
-                visualization_speed=visualization_speed,
-                task_interval=task_interval,
-                total_tugs=tug_count,
-                simulation_time=SIMULATION_TIME
-            )
+# if __name__ == "__main__":
+#     # turn off pygame visualization during batch runs
+#     visualization = False
 
-            # collect scalar KPIs
-            collisions_list.append(kpi["collisions"])
-            tasks_completed_list.append(kpi["tasks_completed"])
-            total_task_time_list.append(kpi["avg_total_time"])
-            avg_distance_list.append(kpi["avg_distance"])
+#     num_runs = 200               # number of independent replications
+#     tug_count = 8                # fleet size under test
+#     task_interval = 3            # seconds between task generations
+#     SIMULATION_TIME = 300
 
-            # average delay per run
-            if kpi["delays"]:
-                avg_delay_list.append(sum(kpi["delays"]) / len(kpi["delays"]))
-            else:
-                avg_delay_list.append(0.0)
+#     # prepare empty lists for each KPI
+#     collisions_list            = []
+#     tasks_completed_list       = []
+#     avg_execution_time_list    = []
+#     total_task_time_list       = []
+#     avg_distance_list          = []
+#     avg_delay_list             = []
+#     idle_time_list             = []
+#     move_to_task_time_list     = []
+#     cpu_time_list              = []
+#     error_count = 0
 
-            # extract average per‑tug state times
-            idle_time_list.append(kpi["avg_state_times"]["idle"])
-            move_to_task_time_list.append(kpi["avg_state_times"]["moving_to_task"])
-            avg_execution_time_list.append(kpi["avg_state_times"]["executing"])
+#     for run in range(1, num_runs + 1):
+#         print(f"\n--- Simulation run {run}/{num_runs} ---")
+#         try:
+#             kpi = run_simulation(
+#                 visualization_speed=visualization_speed,
+#                 task_interval=task_interval,
+#                 total_tugs=tug_count,
+#                 simulation_time=SIMULATION_TIME
+#             )
 
-            # CPU time if returned
-            if "cpu_runtime" in kpi:
-                cpu_time_list.append(kpi["cpu_runtime"])
+#             # collect scalar KPIs
+#             collisions_list.append(kpi["collisions"])
+#             tasks_completed_list.append(kpi["tasks_completed"])
+#             total_task_time_list.append(kpi["avg_total_time"])
+#             avg_distance_list.append(kpi["avg_distance"])
 
-        except Exception as e:
-            error_count += 1
-            print(f"  ERROR in run {run}: {e}")
+#             # average delay per run
+#             if kpi["delays"]:
+#                 avg_delay_list.append(sum(kpi["delays"]) / len(kpi["delays"]))
+#             else:
+#                 avg_delay_list.append(0.0)
 
-    # overall error rate
-    error_rate = error_count / num_runs
-    print(f"\n=== ERROR RATE ===")
-    print(f"  {error_rate*100:.2f}% ({error_count}/{num_runs}) runs failed")
-    print("-----\n")
+#             # extract average per‑tug state times
+#             idle_time_list.append(kpi["avg_state_times"]["idle"])
+#             move_to_task_time_list.append(kpi["avg_state_times"]["moving_to_task"])
+#             avg_execution_time_list.append(kpi["avg_state_times"]["executing"])
 
-    # print mean and std for each KPI
-    from statistics import mean, pstdev
-    def print_stats(name, data):
-        m = mean(data) if data else 0.0
-        s = pstdev(data) if len(data) > 1 else 0.0
-        print(f"{name:25s}: mean = {m:.3f}, std = {s:.3f}")
+#             # CPU time if returned
+#             if "cpu_runtime" in kpi:
+#                 cpu_time_list.append(kpi["cpu_runtime"])
 
-    print("=== KPI SUMMARY STATISTICS ===")
-    print_stats("Collisions",            collisions_list)
-    print_stats("Tasks Completed",       tasks_completed_list)
-    print_stats("Avg Execution Time",    avg_execution_time_list)
-    print_stats("Total Task Time",       total_task_time_list)
-    print_stats("Avg Task Distance",     avg_distance_list)
-    print_stats("Avg Delay",             avg_delay_list)
-    print_stats("Idle Time (per tug)",   idle_time_list)
-    print_stats("Move-to-Task Time",     move_to_task_time_list)
-    if cpu_time_list:
-        print_stats("CPU Runtime",       cpu_time_list)
-    print()
+#         except Exception as e:
+#             error_count += 1
+#             print(f"  ERROR in run {run}: {e}")
 
-    # perform D’Agostino–Pearson test on each list
-    print("=== NORMALITY TESTS ===")
-    test_normality(collisions_list,          "Collisions")
-    test_normality(tasks_completed_list,    "Tasks Completed")
-    test_normality(avg_execution_time_list, "Avg Execution Time")
-    test_normality(total_task_time_list,    "Total Task Time")
-    test_normality(avg_distance_list,       "Avg Task Distance")
-    test_normality(avg_delay_list,          "Avg Delay")
-    test_normality(idle_time_list,          "Idle Time (per tug)")
-    test_normality(move_to_task_time_list,  "Move-to-Task Time (per tug)")
-    if cpu_time_list:
-        test_normality(cpu_time_list,       "CPU Runtime")
+#     # overall error rate
+#     error_rate = error_count / num_runs
+#     print(f"\n=== ERROR RATE ===")
+#     print(f"  {error_rate*100:.2f}% ({error_count}/{num_runs}) runs failed")
+#     print("-----\n")
 
-    # plot histograms
-    kpi_dict = {
-        "Collisions": collisions_list,
-        "Tasks Completed": tasks_completed_list,
-        "Avg Execution Time": avg_execution_time_list,
-        "Total Task Time": total_task_time_list,
-        "Avg Task Distance": avg_distance_list,
-        "Avg Delay": avg_delay_list,
-        "Idle Time": idle_time_list,
-        "Move-to-Task Time": move_to_task_time_list
-    }
-    if cpu_time_list:
-        kpi_dict["CPU Runtime"] = cpu_time_list
+#     # print mean and std for each KPI
+#     from statistics import mean, pstdev
+#     def print_stats(name, data):
+#         m = mean(data) if data else 0.0
+#         s = pstdev(data) if len(data) > 1 else 0.0
+#         print(f"{name:25s}: mean = {m:.3f}, std = {s:.3f}")
 
-    plot_all_distributions(kpi_dict)
+#     print("=== KPI SUMMARY STATISTICS ===")
+#     print_stats("Collisions",            collisions_list)
+#     print_stats("Tasks Completed",       tasks_completed_list)
+#     print_stats("Avg Execution Time",    avg_execution_time_list)
+#     print_stats("Total Task Time",       total_task_time_list)
+#     print_stats("Avg Task Distance",     avg_distance_list)
+#     print_stats("Avg Delay",             avg_delay_list)
+#     print_stats("Idle Time (per tug)",   idle_time_list)
+#     print_stats("Move-to-Task Time",     move_to_task_time_list)
+#     if cpu_time_list:
+#         print_stats("CPU Runtime",       cpu_time_list)
+#     print()
+
+#     # perform D’Agostino–Pearson test on each list
+#     print("=== NORMALITY TESTS ===")
+#     test_normality(collisions_list,          "Collisions")
+#     test_normality(tasks_completed_list,    "Tasks Completed")
+#     test_normality(avg_execution_time_list, "Avg Execution Time")
+#     test_normality(total_task_time_list,    "Total Task Time")
+#     test_normality(avg_distance_list,       "Avg Task Distance")
+#     test_normality(avg_delay_list,          "Avg Delay")
+#     test_normality(idle_time_list,          "Idle Time (per tug)")
+#     test_normality(move_to_task_time_list,  "Move-to-Task Time (per tug)")
+#     if cpu_time_list:
+#         test_normality(cpu_time_list,       "CPU Runtime")
+
+#     # plot histograms
+#     kpi_dict = {
+#         "Collisions": collisions_list,
+#         "Tasks Completed": tasks_completed_list,
+#         "Avg Execution Time": avg_execution_time_list,
+#         "Total Task Time": total_task_time_list,
+#         "Avg Task Distance": avg_distance_list,
+#         "Avg Delay": avg_delay_list,
+#         "Idle Time": idle_time_list,
+#         "Move-to-Task Time": move_to_task_time_list
+#     }
+#     if cpu_time_list:
+#         kpi_dict["CPU Runtime"] = cpu_time_list
+
+#     plot_all_distributions(kpi_dict)
 
 
 
