@@ -8,7 +8,7 @@ class Tug(object):
     # Default configuration parameters
     DEFAULT_CONFIG = {
         "speed": 1,              # Distance units per time unit
-        "battery_capacity": 300, # Battery capacity in Ah
+        "battery_capacity": 10000, # Battery capacity in Ah
         "battery_discharge": 4,  # Battery discharge in Ah per unit of distance
         "battery_charge": 20,    # Battery charge in Ah per second
         "battery_min": 40,       # Minimum battery percentage threshold

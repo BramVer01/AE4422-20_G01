@@ -634,275 +634,275 @@ def run_simulation(visualization_speed, task_interval,
 
 
 '''Testing normality of KPIs'''
-# def plot_all_distributions(kpi_data_dict):
-#     import matplotlib.pyplot as plt
-#     import numpy as np
-#     from scipy.stats import norm
-#     num_plots = len(kpi_data_dict)
-#     cols = 4
-#     rows = (num_plots + cols - 1) // cols
-#     fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-#     axes = axes.flatten() if num_plots > 1 else [axes]
-#     for i, (name, data) in enumerate(kpi_data_dict.items()):
-#         ax = axes[i]
-#         ax.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
-#         mu, std = np.mean(data), np.std(data)
-#         xmin, xmax = ax.get_xlim()
-#         # x = np.linspace(xmin, xmax, 100)
-#         # p = norm.pdf(x, mu, std)
-#         # ax.plot(x, p, 'k', linewidth=2)
-#         # ax.set_title(f"{name}\nMean: {mu:.2f}, Std: {std:.2f}")
-#         ax.set_xlabel(name)
-#         ax.set_ylabel("Probability Density")
-#         ax.grid(True)
-#     for j in range(i + 1, len(axes)):
-#         fig.delaxes(axes[j])
-#     plt.tight_layout()
-#     plt.show()
+def plot_all_distributions(kpi_data_dict):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from scipy.stats import norm
+    num_plots = len(kpi_data_dict)
+    cols = 4
+    rows = (num_plots + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+    axes = axes.flatten() if num_plots > 1 else [axes]
+    for i, (name, data) in enumerate(kpi_data_dict.items()):
+        ax = axes[i]
+        ax.hist(data, bins=10, density=True, alpha=0.6, edgecolor='black')
+        mu, std = np.mean(data), np.std(data)
+        xmin, xmax = ax.get_xlim()
+        # x = np.linspace(xmin, xmax, 100)
+        # p = norm.pdf(x, mu, std)
+        # ax.plot(x, p, 'k', linewidth=2)
+        # ax.set_title(f"{name}\nMean: {mu:.2f}, Std: {std:.2f}")
+        ax.set_xlabel(name)
+        ax.set_ylabel("Probability Density")
+        ax.grid(True)
+    for j in range(i + 1, len(axes)):
+        fig.delaxes(axes[j])
+    plt.tight_layout()
+    plt.show()
 
 
-# if __name__ == "__main__":
-#     # turn off pygame visualization during batch runs
-#     visualization = False
+if __name__ == "__main__":
+    # turn off pygame visualization during batch runs
+    visualization = False
 
-#     num_runs = 20               # number of independent replications
-#     tug_count = 8                # fleet size under test
-#     task_interval = 2            # seconds between task generations
-#     SIMULATION_TIME = 300
+    num_runs = 200               # number of independent replications
+    tug_count = 8                # fleet size under test
+    task_interval = 3            # seconds between task generations
+    SIMULATION_TIME = 300
 
-#     # prepare empty lists for each KPI
-#     collisions_list            = []
-#     tasks_completed_list       = []
-#     avg_execution_time_list    = []
-#     total_task_time_list       = []
-#     avg_distance_list          = []
-#     avg_delay_list             = []
-#     idle_time_list             = []
-#     move_to_task_time_list     = []
-#     cpu_time_list              = []
-#     error_count = 0
+    # prepare empty lists for each KPI
+    collisions_list            = []
+    tasks_completed_list       = []
+    avg_execution_time_list    = []
+    total_task_time_list       = []
+    avg_distance_list          = []
+    avg_delay_list             = []
+    idle_time_list             = []
+    move_to_task_time_list     = []
+    cpu_time_list              = []
+    error_count = 0
 
-#     for run in range(1, num_runs + 1):
-#         print(f"\n--- Simulation run {run}/{num_runs} ---")
-#         try:
-#             kpi = run_simulation(
-#                 visualization_speed=visualization_speed,
-#                 task_interval=task_interval,
-#                 total_tugs=tug_count,
-#                 simulation_time=SIMULATION_TIME
-#             )
+    for run in range(1, num_runs + 1):
+        print(f"\n--- Simulation run {run}/{num_runs} ---")
+        try:
+            kpi = run_simulation(
+                visualization_speed=visualization_speed,
+                task_interval=task_interval,
+                total_tugs=tug_count,
+                simulation_time=SIMULATION_TIME
+            )
 
-#             # collect scalar KPIs
-#             collisions_list.append(kpi["collisions"])
-#             tasks_completed_list.append(kpi["tasks_completed"])
-#             total_task_time_list.append(kpi["avg_total_time"])
-#             avg_distance_list.append(kpi["avg_distance"])
+            # collect scalar KPIs
+            collisions_list.append(kpi["collisions"])
+            tasks_completed_list.append(kpi["tasks_completed"])
+            total_task_time_list.append(kpi["avg_total_time"])
+            avg_distance_list.append(kpi["avg_distance"])
 
-#             # average delay per run
-#             if kpi["delays"]:
-#                 avg_delay_list.append(sum(kpi["delays"]) / len(kpi["delays"]))
-#             else:
-#                 avg_delay_list.append(0.0)
+            # average delay per run
+            if kpi["delays"]:
+                avg_delay_list.append(sum(kpi["delays"]) / len(kpi["delays"]))
+            else:
+                avg_delay_list.append(0.0)
 
-#             # extract average per‑tug state times
-#             idle_time_list.append(kpi["avg_state_times"]["idle"])
-#             move_to_task_time_list.append(kpi["avg_state_times"]["moving_to_task"])
-#             avg_execution_time_list.append(kpi["avg_state_times"]["executing"])
+            # extract average per‑tug state times
+            idle_time_list.append(kpi["avg_state_times"]["idle"])
+            move_to_task_time_list.append(kpi["avg_state_times"]["moving_to_task"])
+            avg_execution_time_list.append(kpi["avg_state_times"]["executing"])
 
-#             # CPU time if returned
-#             if "cpu_runtime" in kpi:
-#                 cpu_time_list.append(kpi["cpu_runtime"])
+            # CPU time if returned
+            if "cpu_runtime" in kpi:
+                cpu_time_list.append(kpi["cpu_runtime"])
 
-#         except Exception as e:
-#             error_count += 1
-#             print(f"  ERROR in run {run}: {e}")
+        except Exception as e:
+            error_count += 1
+            print(f"  ERROR in run {run}: {e}")
 
-#     # overall error rate
-#     error_rate = error_count / num_runs
-#     print(f"\n=== ERROR RATE ===")
-#     print(f"  {error_rate*100:.2f}% ({error_count}/{num_runs}) runs failed")
-#     print("-----\n")
+    # overall error rate
+    error_rate = error_count / num_runs
+    print(f"\n=== ERROR RATE ===")
+    print(f"  {error_rate*100:.2f}% ({error_count}/{num_runs}) runs failed")
+    print("-----\n")
 
-#     # print mean and std for each KPI
-#     from statistics import mean, pstdev
-#     def print_stats(name, data):
-#         m = mean(data) if data else 0.0
-#         s = pstdev(data) if len(data) > 1 else 0.0
-#         print(f"{name:25s}: mean = {m:.3f}, std = {s:.3f}")
+    # print mean and std for each KPI
+    from statistics import mean, pstdev
+    def print_stats(name, data):
+        m = mean(data) if data else 0.0
+        s = pstdev(data) if len(data) > 1 else 0.0
+        print(f"{name:25s}: mean = {m:.3f}, std = {s:.3f}")
 
-#     print("=== KPI SUMMARY STATISTICS ===")
-#     print_stats("Collisions",            collisions_list)
-#     print_stats("Tasks Completed",       tasks_completed_list)
-#     print_stats("Avg Execution Time",    avg_execution_time_list)
-#     print_stats("Total Task Time",       total_task_time_list)
-#     print_stats("Avg Task Distance",     avg_distance_list)
-#     print_stats("Avg Delay",             avg_delay_list)
-#     print_stats("Idle Time (per tug)",   idle_time_list)
-#     print_stats("Move-to-Task Time",     move_to_task_time_list)
-#     if cpu_time_list:
-#         print_stats("CPU Runtime",       cpu_time_list)
-#     print()
+    print("=== KPI SUMMARY STATISTICS ===")
+    print_stats("Collisions",            collisions_list)
+    print_stats("Tasks Completed",       tasks_completed_list)
+    print_stats("Avg Execution Time",    avg_execution_time_list)
+    print_stats("Total Task Time",       total_task_time_list)
+    print_stats("Avg Task Distance",     avg_distance_list)
+    print_stats("Avg Delay",             avg_delay_list)
+    print_stats("Idle Time (per tug)",   idle_time_list)
+    print_stats("Move-to-Task Time",     move_to_task_time_list)
+    if cpu_time_list:
+        print_stats("CPU Runtime",       cpu_time_list)
+    print()
 
-#     # perform D’Agostino–Pearson test on each list
-#     print("=== NORMALITY TESTS ===")
-#     test_normality(collisions_list,          "Collisions")
-#     test_normality(tasks_completed_list,    "Tasks Completed")
-#     test_normality(avg_execution_time_list, "Avg Execution Time")
-#     test_normality(total_task_time_list,    "Total Task Time")
-#     test_normality(avg_distance_list,       "Avg Task Distance")
-#     test_normality(avg_delay_list,          "Avg Delay")
-#     test_normality(idle_time_list,          "Idle Time (per tug)")
-#     test_normality(move_to_task_time_list,  "Move-to-Task Time (per tug)")
-#     if cpu_time_list:
-#         test_normality(cpu_time_list,       "CPU Runtime")
+    # perform D’Agostino–Pearson test on each list
+    print("=== NORMALITY TESTS ===")
+    test_normality(collisions_list,          "Collisions")
+    test_normality(tasks_completed_list,    "Tasks Completed")
+    test_normality(avg_execution_time_list, "Avg Execution Time")
+    test_normality(total_task_time_list,    "Total Task Time")
+    test_normality(avg_distance_list,       "Avg Task Distance")
+    test_normality(avg_delay_list,          "Avg Delay")
+    test_normality(idle_time_list,          "Idle Time (per tug)")
+    test_normality(move_to_task_time_list,  "Move-to-Task Time (per tug)")
+    if cpu_time_list:
+        test_normality(cpu_time_list,       "CPU Runtime")
 
-#     # plot histograms
-#     kpi_dict = {
-#         "Collisions": collisions_list,
-#         "Tasks Completed": tasks_completed_list,
-#         "Avg Execution Time": avg_execution_time_list,
-#         "Total Task Time": total_task_time_list,
-#         "Avg Task Distance": avg_distance_list,
-#         "Avg Delay": avg_delay_list,
-#         "Idle Time": idle_time_list,
-#         "Move-to-Task Time": move_to_task_time_list
-#     }
-#     if cpu_time_list:
-#         kpi_dict["CPU Runtime"] = cpu_time_list
+    # plot histograms
+    kpi_dict = {
+        "Collisions": collisions_list,
+        "Tasks Completed": tasks_completed_list,
+        "Avg Execution Time": avg_execution_time_list,
+        "Total Task Time": total_task_time_list,
+        "Avg Task Distance": avg_distance_list,
+        "Avg Delay": avg_delay_list,
+        "Idle Time": idle_time_list,
+        "Move-to-Task Time": move_to_task_time_list
+    }
+    if cpu_time_list:
+        kpi_dict["CPU Runtime"] = cpu_time_list
 
-#     plot_all_distributions(kpi_dict)
+    plot_all_distributions(kpi_dict)
 
 
 
 '''ALL SENSITIVITY PLOTS'''
-if __name__ == "__main__":
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    from scipy import stats
+# if __name__ == "__main__":
+#     import numpy as np
+#     import matplotlib.pyplot as plt
+#     import pandas as pd
+#     from scipy import stats
 
-    # ---- Batch parameters ----
-    tug_counts       = [2, 4, 6, 8, 9, 10, 12, 14]
-    task_intervals   = [1, 2, 3, 5, 7]
-    n_runs_per_combo = 100    # increase for smoother heatmaps
-    SIM_TIME         = 300
+#     # ---- Batch parameters ----
+#     tug_counts       = [2, 4, 6, 8, 9, 10, 12, 14]
+#     task_intervals   = [1, 2, 3, 5, 7]
+#     n_runs_per_combo = 100    # increase for smoother heatmaps
+#     SIM_TIME         = 300
 
-    def mean_ci(data, confidence=0.95):
-        a = np.array(data, dtype=float)
-        a = a[~np.isnan(a)]
-        if len(a) < 2:
-            return np.nan, np.nan
-        m  = np.mean(a)
-        se = stats.sem(a)
-        h  = se * stats.t.ppf((1+confidence)/2., len(a)-1)
-        return m, h
+#     def mean_ci(data, confidence=0.95):
+#         a = np.array(data, dtype=float)
+#         a = a[~np.isnan(a)]
+#         if len(a) < 2:
+#             return np.nan, np.nan
+#         m  = np.mean(a)
+#         se = stats.sem(a)
+#         h  = se * stats.t.ppf((1+confidence)/2., len(a)-1)
+#         return m, h
 
-    # ---- prepare containers ----
-    delay_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
-    compl_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
-    util_data  = {n:{"ti":[], "U_mean":[], "U_ci":[]} for n in tug_counts}
-    summary_records = []
+#     # ---- prepare containers ----
+#     delay_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
+#     compl_data = {n:{"ti":[], "mean":[], "ci":[]} for n in tug_counts}
+#     util_data  = {n:{"ti":[], "U_mean":[], "U_ci":[]} for n in tug_counts}
+#     summary_records = []
 
-    print("Starting batch simulations...")
-    for n in tug_counts:
-        for ti in task_intervals:
-            delays, rates, U_runs = [], [], []
-            print(f" Fleet={n}, interval={ti}s...", end="", flush=True)
-            for run_i in range(n_runs_per_combo):
-                try:
-                    k = run_simulation(
-                        visualization_speed=0.0,
-                        task_interval=ti,
-                        total_tugs=n,
-                        simulation_time=SIM_TIME
-                    )
-                except Exception as e:
-                    print(f"\n  Warning: sim error on run {run_i+1}: {e}", flush=True)
-                    continue
+#     print("Starting batch simulations...")
+#     for n in tug_counts:
+#         for ti in task_intervals:
+#             delays, rates, U_runs = [], [], []
+#             print(f" Fleet={n}, interval={ti}s...", end="", flush=True)
+#             for run_i in range(n_runs_per_combo):
+#                 try:
+#                     k = run_simulation(
+#                         visualization_speed=0.0,
+#                         task_interval=ti,
+#                         total_tugs=n,
+#                         simulation_time=SIM_TIME
+#                     )
+#                 except Exception as e:
+#                     print(f"\n  Warning: sim error on run {run_i+1}: {e}", flush=True)
+#                     continue
 
-                # collect delay
-                delays.extend(k.get("delays", []))
+#                 # collect delay
+#                 delays.extend(k.get("delays", []))
 
-                # collect completion rate
-                gen = k.get("tasks_completed", 0) + k.get("tasks_difference", 0)
-                rate = (k["tasks_completed"]/gen) if gen>0 else np.nan
-                rates.append(np.clip(rate, 0, 1))
+#                 # collect completion rate
+#                 gen = k.get("tasks_completed", 0) + k.get("tasks_difference", 0)
+#                 rate = (k["tasks_completed"]/gen) if gen>0 else np.nan
+#                 rates.append(np.clip(rate, 0, 1))
 
-                # collect utilization ratio
-                times = k["tug_state_times"]
-                idle = sum(v["idle"]           for v in times.values())
-                move = sum(v["moving_to_task"] for v in times.values())
-                exec_ = sum(v["executing"]     for v in times.values())
-                tot = idle + move + exec_
-                if tot>0:
-                    U_runs.append(exec_/tot)
+#                 # collect utilization ratio
+#                 times = k["tug_state_times"]
+#                 idle = sum(v["idle"]           for v in times.values())
+#                 move = sum(v["moving_to_task"] for v in times.values())
+#                 exec_ = sum(v["executing"]     for v in times.values())
+#                 tot = idle + move + exec_
+#                 if tot>0:
+#                     U_runs.append(exec_/tot)
 
-            # compute stats
-            md, hd = mean_ci(delays)
-            mr, hr = mean_ci(rates)
-            um, uh = mean_ci(U_runs)
+#             # compute stats
+#             md, hd = mean_ci(delays)
+#             mr, hr = mean_ci(rates)
+#             um, uh = mean_ci(U_runs)
 
-            # store
-            delay_data[n]["ti"].append(ti)
-            delay_data[n]["mean"].append(md)
-            delay_data[n]["ci"].append(hd)
+#             # store
+#             delay_data[n]["ti"].append(ti)
+#             delay_data[n]["mean"].append(md)
+#             delay_data[n]["ci"].append(hd)
 
-            compl_data[n]["ti"].append(ti)
-            compl_data[n]["mean"].append(mr)
-            compl_data[n]["ci"].append(hr)
+#             compl_data[n]["ti"].append(ti)
+#             compl_data[n]["mean"].append(mr)
+#             compl_data[n]["ci"].append(hr)
 
-            util_data[n]["ti"].append(ti)
-            util_data[n]["U_mean"].append(um)
-            util_data[n]["U_ci"].append(uh)
+#             util_data[n]["ti"].append(ti)
+#             util_data[n]["U_mean"].append(um)
+#             util_data[n]["U_ci"].append(uh)
 
-            summary_records.append({
-                "Tugs": n, "Interval": ti,
-                "Mean Delay":      f"{md:.2f}±{hd:.2f}",
-                "Completion Rate": f"{mr:.2f}±{hr:.2f}",
-                "Exec. Ratio (U)": f"{um:.2f}±{uh:.2f}"
-            })
-            print(" done", flush=True)
+#             summary_records.append({
+#                 "Tugs": n, "Interval": ti,
+#                 "Mean Delay":      f"{md:.2f}±{hd:.2f}",
+#                 "Completion Rate": f"{mr:.2f}±{hr:.2f}",
+#                 "Exec. Ratio (U)": f"{um:.2f}±{uh:.2f}"
+#             })
+#             print(" done", flush=True)
 
-    # summary table
-    summary_df = pd.DataFrame(summary_records)
-    print("\nBatch summary:")
-    print(summary_df.to_string(index=False))
+#     # summary table
+#     summary_df = pd.DataFrame(summary_records)
+#     print("\nBatch summary:")
+#     print(summary_df.to_string(index=False))
 
-    # prepare meshgrid
-    X, Y = np.meshgrid(task_intervals, tug_counts)
+#     # prepare meshgrid
+#     X, Y = np.meshgrid(task_intervals, tug_counts)
 
-    # Delay heatmap
-    Z_delay = np.vstack([delay_data[n]["mean"] for n in tug_counts])
-    plt.figure(figsize=(8,6))
-    cp = plt.contourf(X, Y, Z_delay, levels=20, cmap="viridis")
-    plt.colorbar(cp, label="Mean Delay (s)")
-    plt.xlabel("Task Interval (s)")
-    plt.ylabel("Number of Tugs")
-    plt.title("Mean Delay Heatmap")
-    plt.tight_layout()
-    plt.show()
+#     # Delay heatmap
+#     Z_delay = np.vstack([delay_data[n]["mean"] for n in tug_counts])
+#     plt.figure(figsize=(8,6))
+#     cp = plt.contourf(X, Y, Z_delay, levels=20, cmap="viridis")
+#     plt.colorbar(cp, label="Mean Delay (s)")
+#     plt.xlabel("Task Interval (s)")
+#     plt.ylabel("Number of Tugs")
+#     plt.title("Mean Delay Heatmap")
+#     plt.tight_layout()
+#     plt.show()
 
-    # Completion rate heatmap
-    Z_comp = np.vstack([compl_data[n]["mean"] for n in tug_counts])
-    plt.figure(figsize=(8,6))
-    cp = plt.contourf(X, Y, Z_comp, levels=20, cmap="viridis")
-    plt.colorbar(cp, label="Mean Completion Rate")
-    plt.xlabel("Task Interval (s)")
-    plt.ylabel("Number of Tugs")
-    plt.title("Completion Rate Heatmap")
-    plt.tight_layout()
-    plt.show()
+#     # Completion rate heatmap
+#     Z_comp = np.vstack([compl_data[n]["mean"] for n in tug_counts])
+#     plt.figure(figsize=(8,6))
+#     cp = plt.contourf(X, Y, Z_comp, levels=20, cmap="viridis")
+#     plt.colorbar(cp, label="Mean Completion Rate")
+#     plt.xlabel("Task Interval (s)")
+#     plt.ylabel("Number of Tugs")
+#     plt.title("Completion Rate Heatmap")
+#     plt.tight_layout()
+#     plt.show()
 
-    # Execution ratio heatmap
-    Z_exec = np.vstack([util_data[n]["U_mean"] for n in tug_counts])
-    plt.figure(figsize=(8,6))
-    cp = plt.contourf(X, Y, Z_exec, levels=20, cmap="viridis")
-    plt.colorbar(cp, label="Mean Execution Ratio")
-    plt.xlabel("Task Interval (s)")
-    plt.ylabel("Number of Tugs")
-    plt.title("Execution Ratio Heatmap")
-    plt.tight_layout()
-    plt.show()
+#     # Execution ratio heatmap
+#     Z_exec = np.vstack([util_data[n]["U_mean"] for n in tug_counts])
+#     plt.figure(figsize=(8,6))
+#     cp = plt.contourf(X, Y, Z_exec, levels=20, cmap="viridis")
+#     plt.colorbar(cp, label="Mean Execution Ratio")
+#     plt.xlabel("Task Interval (s)")
+#     plt.ylabel("Number of Tugs")
+#     plt.title("Execution Ratio Heatmap")
+#     plt.tight_layout()
+#     plt.show()
 
 
 
